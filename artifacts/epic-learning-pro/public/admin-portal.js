@@ -1,11 +1,9 @@
 /**
  * Epic Learning Pro — Admin Portal (Path A · localStorage)
  *
- * All data-key values and data-editable* attributes are permanent.
+ * All data-key / data-editable* attributes are permanent.
  * Storage layer (localStorage) is temporary — replaced with real API later.
- * No re-tagging needed when backend is ready.
- *
- * Developer PIN: 8421
+ * PIN: 8421
  */
 (function () {
   'use strict';
@@ -20,10 +18,11 @@
   var ORIG_DATE   = 'ap-orig-date-'+ SITE_ID;
   var COLOR_KEY   = 'ap-colors-'   + SITE_ID;
   var PROMO_KEY   = 'ap-promo-'    + SITE_ID;
+  var IMG_KEY     = 'ap-img-'      + SITE_ID + '-';
   var PIN         = '8421';
-  var DELAY       = 380; // ms — let React paint first
+  var DELAY       = 420; // ms — let React paint first
 
-  /* Derive base path from the script's own src so CSS loads in both dev & prod */
+  /* Derive base path from the script's own src */
   var scriptSrc = (script && script.src) ? script.src : '';
   var BASE_PATH = scriptSrc ? scriptSrc.replace(/admin-portal\.js[^/]*$/, '') : '/';
 
@@ -35,34 +34,34 @@
     panelMinimized: false,
     panelSection:   'services',
     activeEl:       null,
+    dirty:          false,  // unsaved changes flag
   };
 
   /* ── Brand Color Definitions ───────────────────────────────────── */
-  /* Maps swatch label → CSS var name → fallback hex */
   var BRAND_COLORS = [
-    { label: 'Primary',    varName: '--brand-primary',    hslVar: '--primary',   hex: '#8B5FE6' },
-    { label: 'Secondary',  varName: '--brand-secondary',  hslVar: '--secondary', hex: '#36A6DD' },
-    { label: 'Accent',     varName: '--brand-accent',     hslVar: '--accent',    hex: '#CAA747' },
-    { label: 'Hero Start', varName: '--brand-hero-start', hslVar: null,          hex: '#5B2DA8' },
-    { label: 'Hero End',   varName: '--brand-hero-end',   hslVar: null,          hex: '#A472F0' },
-    { label: 'Dark Tint',  varName: '--brand-tint',       hslVar: null,          hex: '#7a52d4' },
+    { label: 'Primary (Purple)',   varName: '--brand-primary',    hslVar: '--primary',   hex: '#8B5FE6' },
+    { label: 'Secondary (Teal)',   varName: '--brand-secondary',  hslVar: '--secondary', hex: '#36A6DD' },
+    { label: 'Accent (Gold)',      varName: '--brand-accent',     hslVar: '--accent',    hex: '#CAA747' },
+    { label: 'Hero Gradient Start',varName: '--brand-hero-start', hslVar: null,          hex: '#5B2DA8' },
+    { label: 'Hero Gradient End',  varName: '--brand-hero-end',   hslVar: null,          hex: '#A472F0' },
+    { label: 'Dark Tint',          varName: '--brand-tint',       hslVar: null,          hex: '#7a52d4' },
   ];
 
   /* ══════════════════════════════════════════════════════════════════
      UTILITIES
   ══════════════════════════════════════════════════════════════════ */
   function hexToHSL(hex) {
-    hex = hex.replace('#', '');
-    if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
-    var r = parseInt(hex.slice(0,2),16)/255;
-    var g = parseInt(hex.slice(2,4),16)/255;
-    var b = parseInt(hex.slice(4,6),16)/255;
-    var max = Math.max(r,g,b), min = Math.min(r,g,b);
+    hex = hex.replace('#','');
+    if (hex.length===3) hex=hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+    var r=parseInt(hex.slice(0,2),16)/255;
+    var g=parseInt(hex.slice(2,4),16)/255;
+    var b=parseInt(hex.slice(4,6),16)/255;
+    var max=Math.max(r,g,b), min=Math.min(r,g,b);
     var h=0, s=0, l=(max+min)/2;
-    if (max !== min) {
-      var d = max-min;
-      s = l > 0.5 ? d/(2-max-min) : d/(max+min);
-      switch(max) {
+    if(max!==min){
+      var d=max-min;
+      s=l>0.5?d/(2-max-min):d/(max+min);
+      switch(max){
         case r: h=((g-b)/d+(g<b?6:0))/6; break;
         case g: h=((b-r)/d+2)/6; break;
         case b: h=((r-g)/d+4)/6; break;
@@ -71,156 +70,188 @@
     return Math.round(h*360)+' '+Math.round(s*100)+'% '+Math.round(l*100)+'%';
   }
 
-  function escH(str) {
-    return String(str||'')
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  function escH(str){
+    return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  function trunc(str, n) {
-    str = String(str||'');
-    return str.length > n ? str.slice(0,n)+'…' : str;
-  }
-
-  function toast(msg) {
-    var old = document.getElementById('ap-toast');
-    if (old) old.remove();
-    var t = document.createElement('div');
-    t.id = 'ap-toast';
-    t.textContent = msg;
+  function toast(msg){
+    var old=document.getElementById('ap-toast');
+    if(old) old.remove();
+    var t=document.createElement('div');
+    t.id='ap-toast'; t.textContent=msg;
     document.body.appendChild(t);
-    requestAnimationFrame(function() {
-      requestAnimationFrame(function() { t.classList.add('ap-toast-visible'); });
-    });
-    setTimeout(function() {
-      t.classList.remove('ap-toast-visible');
-      setTimeout(function() { if(t.parentNode) t.remove(); }, 400);
-    }, 3000);
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ t.classList.add('ap-toast-visible'); }); });
+    setTimeout(function(){ t.classList.remove('ap-toast-visible'); setTimeout(function(){ if(t.parentNode) t.remove(); },400); },3000);
+  }
+
+  function getPageSectionIds() {
+    return Array.from(document.querySelectorAll('[id]'))
+      .map(function(el){ return el.id; })
+      .filter(function(id){ return id && !id.startsWith('ap-') && id !== 'ap-gear-anchor'; });
   }
 
   /* ══════════════════════════════════════════════════════════════════
      STORAGE HELPERS
   ══════════════════════════════════════════════════════════════════ */
-  function readJSON(key) {
-    try { return JSON.parse(localStorage.getItem(key)||'null'); }
-    catch(e) { return null; }
-  }
+  function readJSON(key){ try{ return JSON.parse(localStorage.getItem(key)||'null'); } catch(e){ return null; } }
 
-  /* Elements eligible for in-place editing (NOT inside a list container) */
-  function simpleEditables() {
-    return Array.from(document.querySelectorAll('[data-editable][data-key]')).filter(function(el) {
+  function simpleEditables(){
+    return Array.from(document.querySelectorAll('[data-editable][data-key]')).filter(function(el){
       return !el.closest('[data-editable-list]');
     });
   }
 
-  function buildSnap() {
-    var out = readJSON(STORAGE_KEY) || {};
-    simpleEditables().forEach(function(el) {
-      out[el.getAttribute('data-key')] = el.innerHTML;
-    });
-    document.querySelectorAll('[data-editable-list] [data-key]').forEach(function(el) {
-      out[el.getAttribute('data-key')] = el.textContent;
-    });
-    document.querySelectorAll('[data-editable-nav] [data-key]').forEach(function(el) {
-      out[el.getAttribute('data-key')] = el.textContent;
-    });
+  function buildSnap(){
+    var out = readJSON(STORAGE_KEY)||{};
+    simpleEditables().forEach(function(el){ out[el.getAttribute('data-key')]=el.innerHTML; });
     return out;
   }
 
-  function applySnap(snap) {
-    if (!snap) return;
-    simpleEditables().forEach(function(el) {
-      var v = snap[el.getAttribute('data-key')];
-      if (v !== undefined) el.innerHTML = v;
+  function applySnap(snap){
+    if(!snap) return;
+    simpleEditables().forEach(function(el){
+      var v=snap[el.getAttribute('data-key')];
+      if(v!==undefined) el.innerHTML=v;
     });
-    document.querySelectorAll('[data-editable-list] [data-key]').forEach(function(el) {
-      var v = snap[el.getAttribute('data-key')];
-      if (v !== undefined) el.textContent = v;
+    /* Structured list items (team names/titles only — rendered by React) */
+    document.querySelectorAll('[data-editable-list] [data-key]').forEach(function(el){
+      var v=snap[el.getAttribute('data-key')];
+      if(v!==undefined) el.textContent=v;
     });
-    document.querySelectorAll('[data-editable-nav] [data-key]').forEach(function(el) {
-      var v = snap[el.getAttribute('data-key')];
-      if (v !== undefined) el.textContent = v;
-    });
-    // Contact items stored as {text, href} objects
-    document.querySelectorAll('[data-editable-contact][data-key]').forEach(function(el) {
-      var v = snap[el.getAttribute('data-key')];
-      if (v && typeof v === 'object') {
-        if (v.text !== undefined) el.textContent = v.text;
-        if (v.href !== undefined && el.tagName === 'A') el.href = v.href;
+    /* Contact */
+    document.querySelectorAll('[data-editable-contact][data-key]').forEach(function(el){
+      var v=snap[el.getAttribute('data-key')];
+      if(v && typeof v==='object'){
+        if(v.text!==undefined) el.textContent=v.text;
+        if(v.href!==undefined && el.tagName==='A') el.href=v.href;
       }
     });
-  }
-
-  function applyColors(colors) {
-    if (!colors) return;
-    var root = document.documentElement;
-    BRAND_COLORS.forEach(function(bc) {
-      var hex = colors[bc.varName];
-      if (!hex) return;
-      root.style.setProperty(bc.varName, hex);
-      if (bc.hslVar) root.style.setProperty(bc.hslVar, hexToHSL(hex));
+    /* Nav text */
+    document.querySelectorAll('[data-editable-nav] [data-key]').forEach(function(el){
+      var key=el.getAttribute('data-key');
+      var v=snap[key];
+      if(v && typeof v==='object'){ if(v.text!==undefined) el.textContent=v.text; }
+      else if(typeof v==='string') el.textContent=v;
     });
   }
 
-  function saveAll() {
-    var snap = buildSnap();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
-
-    /* Persist current rendered brand colors */
-    var savedColors = readJSON(COLOR_KEY) || {};
-    BRAND_COLORS.forEach(function(bc) {
-      var v = document.documentElement.style.getPropertyValue(bc.varName).trim();
-      if (v) savedColors[bc.varName] = v;
+  function applyColors(colors){
+    if(!colors) return;
+    var root=document.documentElement;
+    BRAND_COLORS.forEach(function(bc){
+      var hex=colors[bc.varName];
+      if(!hex) return;
+      root.style.setProperty(bc.varName,hex);
+      if(bc.hslVar) root.style.setProperty(bc.hslVar,hexToHSL(hex));
     });
-    if (Object.keys(savedColors).length) {
-      localStorage.setItem(COLOR_KEY, JSON.stringify(savedColors));
+  }
+
+  function applyImages(){
+    for(var i=0; i<localStorage.length; i++){
+      var k=localStorage.key(i);
+      if(k && k.startsWith(IMG_KEY)){
+        var dataKey=k.slice(IMG_KEY.length);
+        var src=localStorage.getItem(k);
+        if(src){
+          document.querySelectorAll('[data-editable-image][data-key="'+dataKey+'"]').forEach(function(img){
+            img.src=src;
+          });
+        }
+      }
     }
+  }
+
+  function saveAll(){
+    var snap=buildSnap();
+    /* Also pick up nav + contact from current DOM state */
+    document.querySelectorAll('[data-editable-nav] [data-key]').forEach(function(el){
+      var key=el.getAttribute('data-key');
+      var existing=snap[key]||{};
+      if(typeof existing!=='object') existing={};
+      existing.text=el.textContent;
+      snap[key]=existing;
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
+    /* Persist brand colors */
+    var savedColors=readJSON(COLOR_KEY)||{};
+    BRAND_COLORS.forEach(function(bc){
+      var v=document.documentElement.style.getPropertyValue(bc.varName).trim();
+      if(v) savedColors[bc.varName]=v;
+    });
+    if(Object.keys(savedColors).length) localStorage.setItem(COLOR_KEY,JSON.stringify(savedColors));
+    S.dirty=false;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     PAGE OFFSETS (toolbar + banner never cover nav)
+  ══════════════════════════════════════════════════════════════════ */
+  function updatePageOffsets(){
+    var banner=document.getElementById('ap-promo-banner');
+    var toolbar=document.getElementById('ap-toolbar');
+    var hdr=document.querySelector('header');
+
+    var bannerH=(banner && banner.style.display!=='none') ? (banner.offsetHeight||40) : 0;
+    var toolbarH=(toolbar && S.editMode) ? (toolbar.offsetHeight||44) : 0;
+
+    /* Banner sits at absolute top */
+    if(banner) banner.style.top='0';
+
+    /* Toolbar sits just below banner */
+    if(toolbar) toolbar.style.top=bannerH+'px';
+
+    /* Sticky header sits below both */
+    if(hdr) hdr.style.top=(bannerH+toolbarH)+'px';
+
+    /* Push body content down */
+    document.body.style.paddingTop=(bannerH+toolbarH)+'px';
   }
 
   /* ══════════════════════════════════════════════════════════════════
      INIT
   ══════════════════════════════════════════════════════════════════ */
-  function init() {
+  function init(){
     injectStylesheet();
 
-    var saved = readJSON(STORAGE_KEY);
-    if (saved) setTimeout(function() { applySnap(saved); }, 60);
+    var saved=readJSON(STORAGE_KEY);
+    if(saved) setTimeout(function(){ applySnap(saved); },60);
 
-    var savedColors = readJSON(COLOR_KEY);
-    if (savedColors) applyColors(savedColors);
+    var savedColors=readJSON(COLOR_KEY);
+    if(savedColors) applyColors(savedColors);
 
-    if (!localStorage.getItem(ORIG_DATE)) {
-      setTimeout(function() {
+    applyImages();
+
+    if(!localStorage.getItem(ORIG_DATE)){
+      setTimeout(function(){
         localStorage.setItem(ORIG_KEY, JSON.stringify(buildSnap()));
         localStorage.setItem(ORIG_DATE, String(Date.now()));
-      }, 200);
+      },300);
     }
 
     injectPromoElements();
     injectGear();
+
+    /* Apply saved promo (may show banner → update offsets) */
+    var pData=readJSON(PROMO_KEY);
+    if(pData) { applyPromoData(pData); updatePageOffsets(); }
   }
 
-  function injectStylesheet() {
-    if (document.getElementById('ap-css')) return;
-    var link = document.createElement('link');
-    link.id  = 'ap-css';
-    link.rel = 'stylesheet';
-    link.href = BASE_PATH + 'admin-portal.css';
+  function injectStylesheet(){
+    if(document.getElementById('ap-css')) return;
+    var link=document.createElement('link');
+    link.id='ap-css'; link.rel='stylesheet';
+    link.href=BASE_PATH+'admin-portal.css';
     document.head.appendChild(link);
   }
 
   /* ══════════════════════════════════════════════════════════════════
      GEAR (inline in footer credit, vertically centred, desktop only)
   ══════════════════════════════════════════════════════════════════ */
-  function injectGear() {
-    var anchor = document.getElementById('ap-gear-anchor');
-    if (!anchor || document.getElementById('ap-gear')) return;
-    var btn = document.createElement('button');
-    btn.id = 'ap-gear';
-    btn.title = 'Admin editor';
-    btn.setAttribute('aria-label', 'Open admin editor');
-    btn.innerHTML =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"'+
+  function injectGear(){
+    var anchor=document.getElementById('ap-gear-anchor');
+    if(!anchor||document.getElementById('ap-gear')) return;
+    var btn=document.createElement('button');
+    btn.id='ap-gear'; btn.title='Admin editor'; btn.setAttribute('aria-label','Open admin editor');
+    btn.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"'+
       ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+
       '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08'+
       'a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74'+
@@ -231,8 +262,8 @@
       'a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>'+
       '<circle cx="12" cy="12" r="3"/></svg>';
     anchor.appendChild(btn);
-    btn.addEventListener('click', function() {
-      if (!S.editMode) showLogin();
+    btn.addEventListener('click',function(){
+      if(!S.editMode) showLogin();
       else openPanel();
     });
   }
@@ -240,11 +271,11 @@
   /* ══════════════════════════════════════════════════════════════════
      LOGIN
   ══════════════════════════════════════════════════════════════════ */
-  function showLogin() {
-    if (document.getElementById('ap-login-overlay')) return;
-    var ov = document.createElement('div');
-    ov.id = 'ap-login-overlay';
-    ov.innerHTML =
+  function showLogin(){
+    if(document.getElementById('ap-login-overlay')) return;
+    var ov=document.createElement('div');
+    ov.id='ap-login-overlay';
+    ov.innerHTML=
       '<div id="ap-login-modal">'+
         '<div id="ap-login-logo">⚙ Admin Editor</div>'+
         '<p id="ap-login-sub">Local Preview Mode · '+escH(SITE_ID)+'</p>'+
@@ -255,114 +286,152 @@
         '<button id="ap-login-cancel">Cancel</button>'+
       '</div>';
     document.body.appendChild(ov);
-    var inp = ov.querySelector('#ap-pin-input');
-    var err = ov.querySelector('#ap-login-error');
-    setTimeout(function() { inp.focus(); }, 50);
-    function attempt() {
-      if (inp.value === PIN) { ov.remove(); enterEditMode(); }
-      else { err.style.display='block'; inp.value=''; inp.focus(); }
-    }
-    ov.querySelector('#ap-login-btn').addEventListener('click', attempt);
-    inp.addEventListener('keydown', function(e) {
-      if (e.key==='Enter') attempt();
-      if (e.key==='Escape') ov.remove();
-    });
-    ov.querySelector('#ap-login-cancel').addEventListener('click', function() { ov.remove(); });
-    ov.addEventListener('click', function(e) { if(e.target===ov) ov.remove(); });
+    var inp=ov.querySelector('#ap-pin-input');
+    var err=ov.querySelector('#ap-login-error');
+    setTimeout(function(){ inp.focus(); },50);
+    function attempt(){ if(inp.value===PIN){ ov.remove(); enterEditMode(); } else { err.style.display='block'; inp.value=''; inp.focus(); } }
+    ov.querySelector('#ap-login-btn').addEventListener('click',attempt);
+    inp.addEventListener('keydown',function(e){ if(e.key==='Enter') attempt(); if(e.key==='Escape') ov.remove(); });
+    ov.querySelector('#ap-login-cancel').addEventListener('click',function(){ ov.remove(); });
+    ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
   }
 
   /* ══════════════════════════════════════════════════════════════════
      EDIT MODE
   ══════════════════════════════════════════════════════════════════ */
-  function enterEditMode() {
-    S.editMode = true;
+  function enterEditMode(){
+    S.editMode=true; S.dirty=false;
     document.body.classList.add('ap-edit-mode');
 
-    /* In-place editing for simple (non-list) editables */
-    simpleEditables().forEach(function(el) {
-      el.addEventListener('click', handleInPlace, true);
-    });
-
-    /* List containers → open side panel */
-    document.querySelectorAll('[data-editable-list]').forEach(function(el) {
-      el.addEventListener('click', handleListClick, true);
-    });
+    simpleEditables().forEach(function(el){ el.addEventListener('click',handleInPlace,true); });
+    document.querySelectorAll('[data-editable-list]').forEach(function(el){ el.addEventListener('click',handleListClick,true); });
+    document.querySelectorAll('[data-editable-contact]').forEach(function(el){ el.addEventListener('click',handleContactClick,true); });
+    document.querySelectorAll('[data-editable-nav]').forEach(function(el){ el.addEventListener('click',handleNavClick,true); });
+    document.querySelectorAll('[data-editable-image]').forEach(function(el){ el.addEventListener('click',handleImageClick,true); });
 
     showToolbar();
+    updatePageOffsets();
     toast('Edit mode — click any highlighted element to edit.');
   }
 
-  function exitEditMode() {
-    S.editMode    = false;
-    S.previewMode = false;
+  function exitEditMode(skipDirtyCheck){
+    if(!skipDirtyCheck && S.dirty){
+      var choice=confirm('You have unsaved changes.\n\nOK = Discard and exit\nCancel = Stay and save');
+      if(!choice) return; /* user chose Cancel = stay */
+    }
+    S.editMode=false; S.previewMode=false;
     commitActive();
     document.body.classList.remove('ap-edit-mode','ap-preview-mode');
+    document.body.style.paddingTop='';
 
-    simpleEditables().forEach(function(el) {
+    simpleEditables().forEach(function(el){
       el.contentEditable='false';
-      el.removeEventListener('click', handleInPlace, true);
+      el.removeEventListener('click',handleInPlace,true);
     });
-    document.querySelectorAll('[data-editable-list]').forEach(function(el) {
-      el.removeEventListener('click', handleListClick, true);
-    });
+    document.querySelectorAll('[data-editable-list]').forEach(function(el){ el.removeEventListener('click',handleListClick,true); });
+    document.querySelectorAll('[data-editable-contact]').forEach(function(el){ el.removeEventListener('click',handleContactClick,true); });
+    document.querySelectorAll('[data-editable-nav]').forEach(function(el){ el.removeEventListener('click',handleNavClick,true); });
+    document.querySelectorAll('[data-editable-image]').forEach(function(el){ el.removeEventListener('click',handleImageClick,true); });
 
-    ['ap-toolbar','ap-panel','ap-preview-bar','ap-toast',
-     'ap-colors-modal','ap-promo-modal'].forEach(function(id) {
-      var el = document.getElementById(id);
-      if (el) el.remove();
+    /* Reset sticky header top */
+    var hdr=document.querySelector('header');
+    if(hdr) hdr.style.top='';
+
+    ['ap-toolbar','ap-panel','ap-preview-bar','ap-toast','ap-colors-modal','ap-promo-modal'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.remove();
     });
-    S.activeEl    = null;
-    S.panelOpen   = false;
+    S.activeEl=null; S.panelOpen=false; S.dirty=false;
+
+    /* Re-apply promo offsets without toolbar */
+    updatePageOffsets();
   }
 
-  function commitActive() {
-    if (S.activeEl) {
+  function commitActive(){
+    if(S.activeEl){
       S.activeEl.contentEditable='false';
       S.activeEl.classList.remove('ap-editing');
-      S.activeEl = null;
+      S.activeEl=null;
     }
   }
 
-  /* In-place click handler */
-  function handleInPlace(e) {
-    if (S.previewMode) return;
+  /* ── Click handlers ─────────────────────────────────────────────*/
+  function handleInPlace(e){
+    if(S.previewMode) return;
     e.stopPropagation();
-    var el = e.currentTarget;
-    if (S.activeEl && S.activeEl !== el) commitActive();
-    S.activeEl = el;
+    var el=e.currentTarget;
+    if(S.activeEl && S.activeEl!==el) commitActive();
+    S.activeEl=el;
     el.contentEditable='true';
     el.classList.add('ap-editing');
     el.focus();
-    if (document.caretRangeFromPoint) {
-      var r = document.caretRangeFromPoint(e.clientX, e.clientY);
-      if (r) { var sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+    el.addEventListener('input',function(){ S.dirty=true; },{once:false});
+    if(document.caretRangeFromPoint){
+      var r=document.caretRangeFromPoint(e.clientX,e.clientY);
+      if(r){ var sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
     }
   }
 
-  /* List click → panel */
-  function handleListClick(e) {
-    if (S.previewMode) return;
+  function handleListClick(e){
+    if(S.previewMode) return;
     e.stopPropagation();
-    var listEl = e.currentTarget;
-    var type   = listEl.getAttribute('data-editable-list');
-    openPanel(type);
+    openPanel(e.currentTarget.getAttribute('data-editable-list'));
+  }
+
+  function handleContactClick(e){
+    if(S.previewMode) return;
+    e.stopPropagation();
+    e.preventDefault();
+    openPanel('contact');
+  }
+
+  function handleNavClick(e){
+    if(S.previewMode) return;
+    if(e.target.closest('[data-key]')){
+      e.stopPropagation();
+      e.preventDefault();
+      openPanel('nav');
+    }
+  }
+
+  /* ── Image click → file replace ─────────────────────────────────*/
+  function handleImageClick(e){
+    if(S.previewMode) return;
+    e.stopPropagation(); e.preventDefault();
+    var imgEl=e.currentTarget;
+    var key=imgEl.getAttribute('data-key');
+    var inp=document.createElement('input');
+    inp.type='file'; inp.accept='image/*';
+    inp.addEventListener('change',function(){
+      var file=inp.files && inp.files[0];
+      if(!file) return;
+      var reader=new FileReader();
+      reader.onload=function(ev){
+        var dataUrl=ev.target.result;
+        /* Update all matching images */
+        document.querySelectorAll('[data-editable-image][data-key="'+key+'"]').forEach(function(img){ img.src=dataUrl; });
+        localStorage.setItem(IMG_KEY+key, dataUrl);
+        S.dirty=true;
+        toast('Image updated. Hit Save to keep it.');
+      };
+      reader.readAsDataURL(file);
+    });
+    inp.click();
   }
 
   /* ══════════════════════════════════════════════════════════════════
-     TOOLBAR
+     TOOLBAR (pushes content down — not overlay)
   ══════════════════════════════════════════════════════════════════ */
-  function showToolbar() {
-    if (document.getElementById('ap-toolbar')) return;
-    var origDate  = localStorage.getItem(ORIG_DATE);
-    var ageDays   = origDate ? (Date.now()-parseInt(origDate,10))/86400000 : 0;
-    var canRestore = ageDays < 14;
+  function showToolbar(){
+    if(document.getElementById('ap-toolbar')) return;
+    var origDate=localStorage.getItem(ORIG_DATE);
+    var ageDays=origDate?(Date.now()-parseInt(origDate,10))/86400000:0;
+    var canRestore=ageDays<14;
 
-    var tb = document.createElement('div');
-    tb.id = 'ap-toolbar';
-    tb.innerHTML =
+    var tb=document.createElement('div');
+    tb.id='ap-toolbar';
+    tb.innerHTML=
       '<div id="ap-toolbar-inner">'+
-        '<span id="ap-toolbar-label">⚙ Admin Editor '+
-          '<span id="ap-toolbar-mode">· Editing</span></span>'+
+        '<span id="ap-toolbar-label">⚙ Admin Editor <span id="ap-toolbar-mode">· Editing</span></span>'+
         '<div id="ap-toolbar-actions">'+
           '<button id="ap-btn-content" class="ap-btn-secondary">☰ Content</button>'+
           '<button id="ap-btn-colors">🎨 Colors</button>'+
@@ -375,24 +444,30 @@
       '</div>';
     document.body.prepend(tb);
 
-    document.getElementById('ap-btn-content').addEventListener('click', function() { openPanel(); });
-    document.getElementById('ap-btn-colors').addEventListener('click', openColorsModal);
-    document.getElementById('ap-btn-promo').addEventListener('click', openPromoModal);
-    document.getElementById('ap-btn-preview').addEventListener('click', enterPreview);
-    document.getElementById('ap-btn-exit').addEventListener('click', exitEditMode);
-    document.getElementById('ap-btn-save').addEventListener('click', function() {
+    updatePageOffsets();
+
+    document.getElementById('ap-btn-content').addEventListener('click',function(){ openPanel(); });
+    document.getElementById('ap-btn-colors').addEventListener('click',openColorsModal);
+    document.getElementById('ap-btn-promo').addEventListener('click',openPromoModal);
+    document.getElementById('ap-btn-preview').addEventListener('click',enterPreview);
+    document.getElementById('ap-btn-exit').addEventListener('click',function(){ exitEditMode(false); });
+    document.getElementById('ap-btn-save').addEventListener('click',function(){
       commitActive();
       saveAll();
       toast('Saved (local preview mode)');
     });
-
-    var rb = document.getElementById('ap-btn-restore');
-    if (rb) {
-      rb.addEventListener('click', function() {
-        if (!confirm('Restore to original version? All saved edits will be cleared.')) return;
-        [STORAGE_KEY, COLOR_KEY, PROMO_KEY].forEach(function(k){ localStorage.removeItem(k); });
+    var rb=document.getElementById('ap-btn-restore');
+    if(rb){
+      rb.addEventListener('click',function(){
+        if(!confirm('Restore to original version? All saved edits will be cleared.')) return;
+        [STORAGE_KEY,COLOR_KEY,PROMO_KEY].forEach(function(k){ localStorage.removeItem(k); });
+        /* Also clear saved images */
+        for(var i=localStorage.length-1;i>=0;i--){
+          var k2=localStorage.key(i);
+          if(k2 && k2.startsWith(IMG_KEY)) localStorage.removeItem(k2);
+        }
         toast('Restored — reloading…');
-        setTimeout(function(){ location.reload(); }, 1200);
+        setTimeout(function(){ location.reload(); },1200);
       });
     }
   }
@@ -400,99 +475,78 @@
   /* ══════════════════════════════════════════════════════════════════
      SIDE PANEL
   ══════════════════════════════════════════════════════════════════ */
-  var SECTIONS = [
-    { id:'services',     label:'Services'     },
-    { id:'faqs',         label:'FAQs'         },
-    { id:'agitate',      label:'Pain Points'  },
-    { id:'testimonials', label:'Testimonials' },
-    { id:'team',         label:'Team'         },
-    { id:'nav',          label:'Nav Links'    },
-    { id:'contact',      label:'Contact'      },
+  var SECTIONS=[
+    {id:'services',     label:'Services'},
+    {id:'faqs',         label:'FAQs'},
+    {id:'agitate',      label:'Pain Points'},
+    {id:'testimonials', label:'Testimonials'},
+    {id:'team',         label:'Team'},
+    {id:'nav',          label:'Nav Links'},
+    {id:'contact',      label:'Contact'},
   ];
 
-  function openPanel(sectionId) {
-    if (sectionId) S.panelSection = sectionId;
-
-    var existing = document.getElementById('ap-panel');
-    if (existing) {
-      if (sectionId) switchSection(sectionId);
-      if (S.panelMinimized) expandPanel();
+  function openPanel(sectionId){
+    if(sectionId) S.panelSection=sectionId;
+    var existing=document.getElementById('ap-panel');
+    if(existing){
+      if(sectionId) switchSection(sectionId);
+      if(S.panelMinimized) expandPanel();
       return;
     }
 
-    var panel = document.createElement('div');
-    panel.id = 'ap-panel';
-    panel.innerHTML =
+    var panel=document.createElement('div');
+    panel.id='ap-panel';
+    panel.innerHTML=
       '<div id="ap-panel-header">'+
         '<span id="ap-panel-title">☰ Content Panel</span>'+
         '<div id="ap-panel-controls">'+
-          '<button id="ap-panel-min" title="Minimize/Expand">–</button>'+
+          '<button id="ap-panel-min" title="Minimize">–</button>'+
           '<button id="ap-panel-close" title="Close">✕</button>'+
         '</div>'+
       '</div>'+
       '<div id="ap-panel-tabs">'+
         SECTIONS.map(function(s){
-          return '<button class="ap-tab'+(s.id===S.panelSection?' ap-tab-active':'')+
-            '" data-sec="'+s.id+'">'+s.label+'</button>';
+          return '<button class="ap-tab'+(s.id===S.panelSection?' ap-tab-active':'')+'" data-sec="'+s.id+'">'+s.label+'</button>';
         }).join('')+
       '</div>'+
       '<div id="ap-panel-body"></div>';
 
     document.body.appendChild(panel);
-    S.panelOpen = true;
+    S.panelOpen=true;
 
-    /* Tabs */
-    panel.querySelectorAll('.ap-tab').forEach(function(tab) {
-      tab.addEventListener('click', function() { switchSection(tab.getAttribute('data-sec')); });
+    panel.querySelectorAll('.ap-tab').forEach(function(tab){
+      tab.addEventListener('click',function(){ switchSection(tab.getAttribute('data-sec')); });
     });
-
-    /* Minimize */
-    document.getElementById('ap-panel-min').addEventListener('click', function() {
-      var body = document.getElementById('ap-panel-body');
-      var tabs = document.getElementById('ap-panel-tabs');
-      if (S.panelMinimized) {
-        body.style.display=''; tabs.style.display='';
-        document.getElementById('ap-panel-min').textContent='–';
-        S.panelMinimized=false;
-      } else {
-        body.style.display='none'; tabs.style.display='none';
-        document.getElementById('ap-panel-min').textContent='□';
-        S.panelMinimized=true;
-      }
+    document.getElementById('ap-panel-min').addEventListener('click',function(){
+      var body=document.getElementById('ap-panel-body');
+      var tabs=document.getElementById('ap-panel-tabs');
+      var btn=document.getElementById('ap-panel-min');
+      if(S.panelMinimized){ body.style.display=''; tabs.style.display=''; btn.textContent='–'; S.panelMinimized=false; }
+      else { body.style.display='none'; tabs.style.display='none'; btn.textContent='□'; S.panelMinimized=true; }
     });
-
-    /* Close */
-    document.getElementById('ap-panel-close').addEventListener('click', function() {
-      panel.remove();
-      S.panelOpen=false; S.panelMinimized=false;
-    });
-
-    /* Drag */
+    document.getElementById('ap-panel-close').addEventListener('click',function(){ panel.remove(); S.panelOpen=false; S.panelMinimized=false; });
     makeDraggable(panel, document.getElementById('ap-panel-header'));
-
     switchSection(S.panelSection);
   }
 
-  function expandPanel() {
+  function expandPanel(){
     var body=document.getElementById('ap-panel-body');
     var tabs=document.getElementById('ap-panel-tabs');
     var btn=document.getElementById('ap-panel-min');
     if(body) body.style.display='';
     if(tabs) tabs.style.display='';
-    if(btn)  btn.textContent='–';
+    if(btn) btn.textContent='–';
     S.panelMinimized=false;
   }
 
-  function switchSection(id) {
+  function switchSection(id){
     S.panelSection=id;
     var panel=document.getElementById('ap-panel');
-    if (!panel) return;
-    panel.querySelectorAll('.ap-tab').forEach(function(t){
-      t.classList.toggle('ap-tab-active', t.getAttribute('data-sec')===id);
-    });
+    if(!panel) return;
+    panel.querySelectorAll('.ap-tab').forEach(function(t){ t.classList.toggle('ap-tab-active',t.getAttribute('data-sec')===id); });
     var body=document.getElementById('ap-panel-body');
-    if (!body) return;
-    switch(id) {
+    if(!body) return;
+    switch(id){
       case 'services':     body.innerHTML=buildServicesForms();     break;
       case 'faqs':         body.innerHTML=buildFAQForms();          break;
       case 'agitate':      body.innerHTML=buildAgitateForms();      break;
@@ -505,222 +559,400 @@
     wireFormInputs(body);
   }
 
-  /* ── Form builders ─────────────────────────────────────────────── */
+  /* ── Helpers ────────────────────────────────────────────────────*/
+  function getBulletEls(cardPrefix) {
+    var all = [];
+    var i = 0;
+    while(true) {
+      var el = document.querySelector('[data-key="'+cardPrefix+'-bullet-'+i+'"]');
+      if(!el) break;
+      all.push({el:el, idx:i});
+      i++;
+    }
+    return all;
+  }
 
-  /* Generic: collect [data-key^=prefix], group by card index, build accordion */
-  function buildKeyGroupForms(prefix, cardLabel) {
-    var all = Array.from(document.querySelectorAll('[data-key^="'+prefix+'"]'));
-    var indices = {};
-    all.forEach(function(el) {
-      var rest = el.getAttribute('data-key').slice(prefix.length);
-      var idx  = parseInt(rest.split('-')[0], 10);
-      if (!isNaN(idx)) indices[idx]=true;
+  function buildBulletFields(cardPrefix, highlightClass) {
+    var bullets = getBulletEls(cardPrefix);
+    if(!bullets.length) return '';
+    var html = '<label class="ap-lbl">Bullet Points</label>'+
+      '<div class="ap-bullets" data-bullet-prefix="'+escH(cardPrefix)+'">';
+    bullets.forEach(function(b){
+      html += '<div class="ap-bullet-row">'+
+        '<input class="ap-inp ap-bullet-inp" type="text" data-tk="'+escH(cardPrefix+'-bullet-'+b.idx)+'" value="'+escH(b.el.textContent||'')+'" placeholder="Bullet item" />'+
+        '<button class="ap-rm-bullet" data-bi="'+b.idx+'" title="Remove">−</button>'+
+      '</div>';
     });
-    var sorted = Object.keys(indices).map(Number).sort(function(a,b){return a-b;});
-    if (!sorted.length) return '<p class="ap-empty">No items found in DOM.</p>';
-
-    return sorted.map(function(idx) {
-      var cardEls = all.filter(function(el) {
-        return el.getAttribute('data-key').startsWith(prefix+idx+'-');
-      });
-      var titleEl = cardEls.find(function(el){
-        return el.getAttribute('data-key').endsWith('-title') ||
-               el.getAttribute('data-key').endsWith('-q');
-      });
-      var label = titleEl ? trunc(titleEl.textContent||'',42) : cardLabel+' '+(idx+1);
-      return '<details class="ap-acc">'+ 
-        '<summary class="ap-acc-hd">'+escH(label)+'</summary>'+
-        '<div class="ap-acc-body">'+
-          cardEls.map(function(el) {
-            var key  = el.getAttribute('data-key');
-            var fld  = key.slice((prefix+idx+'-').length).replace(/-/g,' ');
-            var val  = el.textContent||'';
-            var long = val.length > 80;
-            return '<label class="ap-lbl">'+escH(fld)+'</label>'+
-              (long
-                ? '<textarea class="ap-inp" data-tk="'+escH(key)+'" rows="3">'+escH(val)+'</textarea>'
-                : '<input class="ap-inp" type="text" data-tk="'+escH(key)+'" value="'+escH(val)+'" />');
-          }).join('')+
-        '</div></details>';
-    }).join('');
+    html += '</div>'+
+      '<button class="ap-add-bullet ap-add-btn-sm" data-bullet-prefix="'+escH(cardPrefix)+'">+ Add bullet</button>';
+    return html;
   }
 
-  function buildServicesForms() {
+  /* ── Form: Services ─────────────────────────────────────────────*/
+  function buildServicesForms(){
+    var cards = [];
+    var i = 0;
+    while(true) {
+      var el = document.querySelector('[data-key="services.card-'+i+'-title"]');
+      if(!el) break;
+      cards.push(i);
+      i++;
+    }
+    if(!cards.length) return '<p class="ap-empty">No service cards found in DOM.</p>';
     return '<div class="ap-sec-title">Service Cards</div>'+
-      buildKeyGroupForms('services.card-','Card');
+      cards.map(function(idx){
+        var prefix='services.card-'+idx;
+        var titleEl=document.querySelector('[data-key="'+prefix+'-title"]');
+        var subtitleEl=document.querySelector('[data-key="'+prefix+'-subtitle"]');
+        var descEl=document.querySelector('[data-key="'+prefix+'-desc"]');
+        var sectionEl=document.querySelector('[data-key="'+prefix+'-section"]');
+        var noteEl=document.querySelector('[data-key="'+prefix+'-note"]');
+        return '<details class="ap-acc">'+
+          '<summary class="ap-acc-hd">Service '+(idx+1)+'</summary>'+
+          '<div class="ap-acc-body">'+
+            fld('Title','text',prefix+'-title',titleEl?titleEl.textContent:'')+
+            fld('Subtitle','text',prefix+'-subtitle',subtitleEl?subtitleEl.textContent:'')+
+            fldTA('Description',prefix+'-desc',descEl?descEl.textContent:'')+
+            fld('Section Label','text',prefix+'-section',sectionEl?sectionEl.textContent:'')+
+            fld('Footer Note','text',prefix+'-note',noteEl?noteEl.textContent:'')+
+            buildBulletFields(prefix)+
+          '</div></details>';
+      }).join('');
   }
 
-  function buildFAQForms() {
+  /* ── Form: FAQs ─────────────────────────────────────────────────*/
+  function buildFAQForms(){
+    var items = [];
+    var i = 0;
+    while(true){
+      var el=document.querySelector('[data-key="faq.item-'+i+'-q"]');
+      if(!el) break;
+      items.push(i); i++;
+    }
+    if(!items.length) return '<p class="ap-empty">No FAQ items found in DOM.</p>';
     return '<div class="ap-sec-title">FAQ Items</div>'+
-      buildKeyGroupForms('faq.item-','Question');
+      items.map(function(idx){
+        var qEl=document.querySelector('[data-key="faq.item-'+idx+'-q"]');
+        var aEl=document.querySelector('[data-key="faq.item-'+idx+'-a"]');
+        return '<details class="ap-acc">'+
+          '<summary class="ap-acc-hd">Question '+(idx+1)+'</summary>'+
+          '<div class="ap-acc-body">'+
+            fld('Question','text','faq.item-'+idx+'-q',qEl?qEl.textContent:'')+
+            fldTA('Answer','faq.item-'+idx+'-a',aEl?aEl.textContent:'')+
+          '</div></details>';
+      }).join('');
   }
 
-  function buildAgitateForms() {
+  /* ── Form: Pain Points (Agitate) ────────────────────────────────*/
+  function buildAgitateForms(){
+    var items=[];
+    var i=0;
+    while(true){
+      var el=document.querySelector('[data-key="agitate.card-'+i+'-title"]');
+      if(!el) break;
+      items.push(i); i++;
+    }
+    if(!items.length) return '<p class="ap-empty">No pain point cards found in DOM.</p>';
     return '<div class="ap-sec-title">Pain Point Cards</div>'+
-      buildKeyGroupForms('agitate.card-','Card');
+      items.map(function(idx){
+        var titleEl=document.querySelector('[data-key="agitate.card-'+idx+'-title"]');
+        var descEl=document.querySelector('[data-key="agitate.card-'+idx+'-desc"]');
+        return '<details class="ap-acc">'+
+          '<summary class="ap-acc-hd">Pain Point '+(idx+1)+'</summary>'+
+          '<div class="ap-acc-body">'+
+            fld('Title','text','agitate.card-'+idx+'-title',titleEl?titleEl.textContent:'')+
+            fldTA('Description','agitate.card-'+idx+'-desc',descEl?descEl.textContent:'')+
+          '</div></details>';
+      }).join('');
   }
 
-  function buildTestimonialForms() {
-    var textEls = Array.from(document.querySelectorAll('[data-key^="testimonials.item-"][data-key$="-text"]'));
-    if (!textEls.length) return '<p class="ap-empty">Tag testimonial text elements with data-key="testimonials.item-N-text".</p>';
+  /* ── Form: Testimonials ─────────────────────────────────────────*/
+  function buildTestimonialForms(){
+    var textEls=Array.from(document.querySelectorAll('[data-key^="testimonials.item-"][data-key$="-text"]'));
+    if(!textEls.length) return '<p class="ap-empty">No testimonial data-key attributes found.</p>';
     return '<div class="ap-sec-title">Testimonial Cards</div>'+
-      textEls.map(function(tel, i) {
-        var tKey  = tel.getAttribute('data-key');
-        var idxM  = tKey.match(/item-(\d+)-/);
-        var idx   = idxM ? idxM[1] : i;
-        var nKey  = 'testimonials.item-'+idx+'-name';
-        var nEl   = document.querySelector('[data-key="'+nKey+'"]');
-        var name  = nEl ? (nEl.textContent||'') : '';
+      textEls.map(function(tel,i){
+        var tKey=tel.getAttribute('data-key');
+        var idxM=tKey.match(/item-(\d+)-/);
+        var idx=idxM?idxM[1]:i;
+        var nKey='testimonials.item-'+idx+'-name';
+        var sKey='testimonials.item-'+idx+'-source';
+        var nEl=document.querySelector('[data-key="'+nKey+'"]');
+        var sEl=document.querySelector('[data-key="'+sKey+'"]');
+        var nameVal=nEl?(nEl.textContent||''):'';
         return '<details class="ap-acc">'+
-          '<summary class="ap-acc-hd">'+escH(name||'Review '+(i+1))+'</summary>'+
+          '<summary class="ap-acc-hd">Testimonial '+(parseInt(idx)+1)+'</summary>'+
           '<div class="ap-acc-body">'+
-            '<label class="ap-lbl">Reviewer Name</label>'+
-            '<input class="ap-inp" type="text" data-tk="'+nKey+'" value="'+escH(name)+'" />'+
-            '<label class="ap-lbl">Review Text</label>'+
-            '<textarea class="ap-inp" data-tk="'+escH(tKey)+'" rows="3">'+escH(tel.textContent||'')+'</textarea>'+
+            fld('Reviewer Name','text',nKey,nameVal)+
+            fldTA('Review Text',tKey,tel.textContent||'')+
+            (sEl ? fld('Source (e.g. Google, Alignable)','text',sKey,sEl.textContent||'') : '')+
           '</div></details>';
       }).join('');
   }
 
-  function buildTeamForms() {
-    var nameEls = Array.from(document.querySelectorAll('[data-key^="team.member-"][data-key$="-name"]'));
-    if (!nameEls.length) return '<p class="ap-empty">No team data-key attributes found.</p>';
+  /* ── Form: Team ─────────────────────────────────────────────────*/
+  function buildTeamForms(){
+    var nameEls=Array.from(document.querySelectorAll('[data-key^="team.member-"][data-key$="-name"]'));
+    if(!nameEls.length) return '<p class="ap-empty">No team data-key attributes found.</p>';
     return '<div class="ap-sec-title">Team Members</div>'+
-      nameEls.map(function(nel, i) {
-        var nKey = nel.getAttribute('data-key');
-        var mch  = nKey.match(/member-(\d+)-/);
-        var idx  = mch ? mch[1] : i;
-        var tKey = 'team.member-'+idx+'-title';
-        var tel  = document.querySelector('[data-key="'+tKey+'"]');
+      nameEls.map(function(nel,i){
+        var nKey=nel.getAttribute('data-key');
+        var mch=nKey.match(/member-(\d+)-/);
+        var idx=mch?mch[1]:i;
+        var tKey='team.member-'+idx+'-title';
+        var iKey='team.member-'+idx+'-photo';
+        var tel=document.querySelector('[data-key="'+tKey+'"]');
+        var imgEl=document.querySelector('[data-editable-image][data-key="'+iKey+'"]');
         return '<details class="ap-acc">'+
-          '<summary class="ap-acc-hd">'+escH(nel.textContent||'Member '+(i+1))+'</summary>'+
+          '<summary class="ap-acc-hd">Member '+(parseInt(idx)+1)+'</summary>'+
           '<div class="ap-acc-body">'+
-            '<label class="ap-lbl">Name</label>'+
-            '<input class="ap-inp" type="text" data-tk="'+escH(nKey)+'" value="'+escH(nel.textContent||'')+'" />'+
-            '<label class="ap-lbl">Title / Role</label>'+
-            '<input class="ap-inp" type="text" data-tk="'+escH(tKey)+'" value="'+escH(tel?tel.textContent:'')+'" />'+
+            fld('Name','text',nKey,nel.textContent||'')+
+            fld('Title / Role','text',tKey,tel?tel.textContent:'')+
+            (imgEl
+              ? '<label class="ap-lbl">Photo</label>'+
+                '<button class="ap-img-replace-btn ap-add-btn-sm" data-img-key="'+escH(iKey)+'">🖼 Replace Photo</button>'
+              : '<p class="ap-hint">Add data-editable-image to the team photo to enable replacement.</p>')+
           '</div></details>';
       }).join('');
   }
 
-  function buildNavForms() {
-    var btns = Array.from(document.querySelectorAll('[data-editable-nav] [data-key]'));
-    if (!btns.length) return '<p class="ap-empty">No nav links found. Add data-editable-nav to your &lt;nav&gt;.</p>';
+  /* ── Form: Nav Links ────────────────────────────────────────────*/
+  function buildNavForms(){
+    var btns=Array.from(document.querySelectorAll('[data-editable-nav] [data-key]'));
+    if(!btns.length) return '<p class="ap-empty">No nav links found. Add data-editable-nav to your &lt;nav&gt;.</p>';
+    var sections=getPageSectionIds();
+    var snap=readJSON(STORAGE_KEY)||{};
     return '<div class="ap-sec-title">Navigation Links</div>'+
-      '<p class="ap-hint">Edit display text. Scroll targets are defined in code.</p>'+
-      btns.map(function(btn) {
-        var key = btn.getAttribute('data-key');
-        return '<label class="ap-lbl">'+escH(key)+'</label>'+
-          '<input class="ap-inp" type="text" data-tk="'+escH(key)+'" value="'+escH(btn.textContent||'')+'" />';
+      '<p class="ap-hint" style="margin-bottom:8px">Edit display text and scroll destination for each nav link.</p>'+
+      btns.map(function(btn,i){
+        var key=btn.getAttribute('data-key');
+        var saved=snap[key];
+        if(saved && typeof saved==='object'){ /* ok */ }
+        else { saved={}; }
+        var text=saved.text!==undefined?saved.text:(btn.textContent||'').trim();
+        var destType=saved.destType||'scroll';
+        var destVal=saved.destVal||'';
+        return '<details class="ap-acc">'+
+          '<summary class="ap-acc-hd">Nav Link '+(i+1)+'</summary>'+
+          '<div class="ap-acc-body">'+
+            '<label class="ap-lbl">Display Text</label>'+
+            '<input class="ap-inp" type="text" data-nk="'+escH(key)+'" data-nf="text" value="'+escH(text)+'" />'+
+            '<label class="ap-lbl">Destination Type</label>'+
+            '<select class="ap-inp ap-dest-type" data-nk="'+escH(key)+'" data-nf="destType">'+
+              '<option value="scroll"'+(destType==='scroll'?' selected':'')+'>Scroll to Section</option>'+
+              '<option value="url"'+(destType==='url'?' selected':'')+'>External URL</option>'+
+            '</select>'+
+            '<div class="ap-dest-scroll-wrap"'+(destType!=='scroll'?' style="display:none"':'')+'>'+
+              '<label class="ap-lbl">Section (scroll target)</label>'+
+              '<select class="ap-inp" data-nk="'+escH(key)+'" data-nf="destVal">'+
+                sections.map(function(sid){
+                  return '<option value="'+escH(sid)+'"'+(destVal===sid?' selected':'')+'>'+escH('#'+sid)+'</option>';
+                }).join('')+
+              '</select>'+
+            '</div>'+
+            '<div class="ap-dest-url-wrap"'+(destType!=='url'?' style="display:none"':'')+'>'+
+              '<label class="ap-lbl">URL</label>'+
+              '<input class="ap-inp" type="text" data-nk="'+escH(key)+'" data-nf="destValUrl" placeholder="https://..." value="'+escH(destType==='url'?destVal:'')+'" />'+
+            '</div>'+
+          '</div></details>';
       }).join('');
   }
 
-  function buildContactForms() {
-    var els = Array.from(document.querySelectorAll('[data-editable-contact][data-key]'));
-    if (!els.length) return '<p class="ap-empty">No contact elements found. Add data-editable-contact attributes.</p>';
-    var snap = readJSON(STORAGE_KEY)||{};
+  /* ── Form: Contact ──────────────────────────────────────────────*/
+  function buildContactForms(){
+    var els=Array.from(document.querySelectorAll('[data-editable-contact][data-key]'));
+    if(!els.length) return '<p class="ap-empty">No contact elements found.</p>';
+    var snap=readJSON(STORAGE_KEY)||{};
     return '<div class="ap-sec-title">Contact & Links</div>'+
-      els.map(function(el) {
-        var key   = el.getAttribute('data-key');
-        var label = key.split('.').pop().replace(/-/g,' ');
-        var saved = snap[key]||{};
-        var text  = saved.text !== undefined ? saved.text : (el.textContent||'').trim();
-        var href  = saved.href !== undefined ? saved.href : (el.getAttribute('href')||'');
+      els.map(function(el,i){
+        var key=el.getAttribute('data-key');
+        var label='Contact Item '+(i+1)+' ('+key.split('.').pop().replace(/-/g,' ')+')';
+        var saved=snap[key]||{};
+        var text=saved.text!==undefined?saved.text:(el.textContent||'').trim();
+        var href=saved.href!==undefined?saved.href:(el.getAttribute('href')||el.getAttribute('data-href')||'');
         return '<details class="ap-acc">'+
           '<summary class="ap-acc-hd">'+escH(label)+'</summary>'+
           '<div class="ap-acc-body">'+
             '<label class="ap-lbl">Display Text</label>'+
             '<input class="ap-inp" type="text" data-tk="'+escH(key)+'" data-tf="text" value="'+escH(text)+'" />'+
-            (href!==''
-              ? '<label class="ap-lbl">Link / URL</label>'+
-                '<input class="ap-inp" type="text" data-tk="'+escH(key)+'" data-tf="href" value="'+escH(href)+'" />'
-              : '')+
+            '<label class="ap-lbl">Link (tel: / mailto: / URL)</label>'+
+            '<input class="ap-inp" type="text" data-tk="'+escH(key)+'" data-tf="href" placeholder="mailto:you@example.com" value="'+escH(href)+'" />'+
           '</div></details>';
       }).join('');
   }
 
-  /* ── Wire inputs → live DOM updates ────────────────────────────── */
-  function wireFormInputs(container) {
-    container.querySelectorAll('[data-tk]').forEach(function(inp) {
-      inp.addEventListener('input', function() {
-        var key = inp.getAttribute('data-tk');
-        var tf  = inp.getAttribute('data-tf'); // 'text' | 'href' | null
-        var val = inp.value;
+  /* ── Shared field helpers ───────────────────────────────────────*/
+  function fld(label, type, key, val){
+    return '<label class="ap-lbl">'+escH(label)+'</label>'+
+      '<input class="ap-inp" type="'+type+'" data-tk="'+escH(key)+'" value="'+escH(val)+'" />';
+  }
+  function fldTA(label, key, val){
+    return '<label class="ap-lbl">'+escH(label)+'</label>'+
+      '<textarea class="ap-inp" data-tk="'+escH(key)+'" rows="3">'+escH(val)+'</textarea>';
+  }
 
-        if (tf) {
+  /* ── Wire inputs → live DOM updates ────────────────────────────*/
+  function wireFormInputs(container){
+    /* Standard data-tk inputs */
+    container.querySelectorAll('[data-tk]').forEach(function(inp){
+      inp.addEventListener('input',function(){
+        var key=inp.getAttribute('data-tk');
+        var tf=inp.getAttribute('data-tf');
+        var val=inp.value;
+        S.dirty=true;
+        if(tf){
           /* Contact item */
-          var contEl = document.querySelector('[data-editable-contact][data-key="'+key+'"]');
-          if (contEl) {
-            if (tf==='text') contEl.textContent = val;
-            if (tf==='href' && contEl.tagName==='A') contEl.href = val;
+          var snap=readJSON(STORAGE_KEY)||{};
+          if(!snap[key]||typeof snap[key]!=='object') snap[key]={};
+          snap[key][tf]=val;
+          localStorage.setItem(STORAGE_KEY,JSON.stringify(snap));
+          var contEl=document.querySelector('[data-editable-contact][data-key="'+key+'"]');
+          if(contEl){
+            if(tf==='text') contEl.textContent=val;
+            if(tf==='href' && contEl.tagName==='A') contEl.href=val;
           }
-          /* Persist immediately */
-          var snap = readJSON(STORAGE_KEY)||{};
-          if (!snap[key] || typeof snap[key]!=='object') snap[key]={};
-          snap[key][tf] = val;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
         } else {
-          /* All DOM elements with this data-key (handles duplicated marquee) */
-          document.querySelectorAll('[data-key="'+key+'"]').forEach(function(el) {
-            el.textContent = val;
-          });
+          document.querySelectorAll('[data-key="'+key+'"]').forEach(function(el){ el.textContent=val; });
         }
+      });
+    });
+
+    /* Nav inputs (data-nk / data-nf) */
+    container.querySelectorAll('[data-nk]').forEach(function(inp){
+      inp.addEventListener('input',function(){
+        var key=inp.getAttribute('data-nk');
+        var nf=inp.getAttribute('data-nf');
+        var val=inp.value;
+        S.dirty=true;
+        var snap=readJSON(STORAGE_KEY)||{};
+        if(!snap[key]||typeof snap[key]!=='object') snap[key]={};
+        if(nf==='destValUrl') snap[key].destVal=val;
+        else snap[key][nf]=val;
+        localStorage.setItem(STORAGE_KEY,JSON.stringify(snap));
+        if(nf==='text'){
+          document.querySelectorAll('[data-editable-nav] [data-key="'+key+'"]').forEach(function(el){ el.textContent=val; });
+        }
+      });
+    });
+
+    /* Nav destination type switcher */
+    container.querySelectorAll('.ap-dest-type').forEach(function(sel){
+      sel.addEventListener('change',function(){
+        var wrap=sel.closest('.ap-acc-body');
+        if(!wrap) return;
+        var scrollWrap=wrap.querySelector('.ap-dest-scroll-wrap');
+        var urlWrap=wrap.querySelector('.ap-dest-url-wrap');
+        if(sel.value==='scroll'){ if(scrollWrap) scrollWrap.style.display=''; if(urlWrap) urlWrap.style.display='none'; }
+        else { if(scrollWrap) scrollWrap.style.display='none'; if(urlWrap) urlWrap.style.display=''; }
+      });
+    });
+
+    /* Bullet remove */
+    container.querySelectorAll('.ap-rm-bullet').forEach(function(btn){
+      btn.addEventListener('click',function(e){
+        e.preventDefault();
+        var row=btn.closest('.ap-bullet-row');
+        if(row) row.remove();
+        S.dirty=true;
+      });
+    });
+
+    /* Bullet add */
+    container.querySelectorAll('.ap-add-bullet').forEach(function(btn){
+      btn.addEventListener('click',function(e){
+        e.preventDefault();
+        var prefix=btn.getAttribute('data-bullet-prefix');
+        var bulletsWrap=container.querySelector('[data-bullet-prefix="'+prefix+'"]');
+        if(!bulletsWrap) return;
+        var rows=bulletsWrap.querySelectorAll('.ap-bullet-row');
+        var nextIdx=rows.length;
+        var row=document.createElement('div');
+        row.className='ap-bullet-row';
+        row.innerHTML='<input class="ap-inp ap-bullet-inp" type="text" data-tk="'+escH(prefix+'-bullet-'+nextIdx)+'" value="" placeholder="New bullet" />'+
+          '<button class="ap-rm-bullet" data-bi="'+nextIdx+'" title="Remove">−</button>';
+        bulletsWrap.appendChild(row);
+        /* Wire the new input */
+        row.querySelector('.ap-inp').addEventListener('input',function(ev){
+          document.querySelectorAll('[data-key="'+prefix+'-bullet-'+nextIdx+'"]').forEach(function(el){ el.textContent=ev.target.value; });
+          S.dirty=true;
+        });
+        row.querySelector('.ap-rm-bullet').addEventListener('click',function(){ row.remove(); S.dirty=true; });
+        S.dirty=true;
+      });
+    });
+
+    /* Team photo replace buttons */
+    container.querySelectorAll('.ap-img-replace-btn').forEach(function(btn){
+      btn.addEventListener('click',function(e){
+        e.preventDefault();
+        var imgKey=btn.getAttribute('data-img-key');
+        var inp2=document.createElement('input');
+        inp2.type='file'; inp2.accept='image/*';
+        inp2.addEventListener('change',function(){
+          var file=inp2.files && inp2.files[0];
+          if(!file) return;
+          var reader=new FileReader();
+          reader.onload=function(ev){
+            var dataUrl=ev.target.result;
+            document.querySelectorAll('[data-editable-image][data-key="'+imgKey+'"]').forEach(function(img){ img.src=dataUrl; });
+            localStorage.setItem(IMG_KEY+imgKey,dataUrl);
+            S.dirty=true;
+            toast('Photo updated. Hit Save to keep it.');
+          };
+          reader.readAsDataURL(file);
+        });
+        inp2.click();
       });
     });
   }
 
   /* ── Draggable panel ─────────────────────────────────────────────*/
-  function makeDraggable(panel, handle) {
-    var dr = { on:false, sx:0, sy:0, pr:0, pt:0 };
+  function makeDraggable(panel, handle){
+    var dr={on:false,sx:0,sy:0,pr:0,pt:0};
     handle.style.cursor='grab';
-    handle.addEventListener('mousedown', function(e) {
-      dr.on=true;
-      dr.sx=e.clientX; dr.sy=e.clientY;
+    handle.addEventListener('mousedown',function(e){
+      if(e.target.closest('button')) return;
+      dr.on=true; dr.sx=e.clientX; dr.sy=e.clientY;
       var rect=panel.getBoundingClientRect();
       dr.pr=window.innerWidth-rect.right; dr.pt=rect.top;
       panel.style.transition='none';
       document.body.style.userSelect='none';
       handle.style.cursor='grabbing';
     });
-    window.addEventListener('mousemove', function(e) {
-      if (!dr.on) return;
+    window.addEventListener('mousemove',function(e){
+      if(!dr.on) return;
       var dx=e.clientX-dr.sx, dy=e.clientY-dr.sy;
-      var nr=Math.max(0,Math.min(dr.pr-dx, window.innerWidth-80));
-      var nt=Math.max(0,Math.min(dr.pt+dy, window.innerHeight-120));
+      var nr=Math.max(0,Math.min(dr.pr-dx,window.innerWidth-80));
+      var nt=Math.max(0,Math.min(dr.pt+dy,window.innerHeight-80));
       panel.style.right=nr+'px'; panel.style.top=nt+'px'; panel.style.left='auto';
     });
-    window.addEventListener('mouseup', function() {
-      if (dr.on) { dr.on=false; document.body.style.userSelect=''; handle.style.cursor='grab'; }
+    window.addEventListener('mouseup',function(){
+      if(dr.on){ dr.on=false; document.body.style.userSelect=''; handle.style.cursor='grab'; }
     });
   }
 
   /* ══════════════════════════════════════════════════════════════════
-     BRAND COLORS MODAL
+     BRAND COLORS MODAL (movable)
   ══════════════════════════════════════════════════════════════════ */
-  function openColorsModal() {
-    var ex = document.getElementById('ap-colors-modal');
-    if (ex) { ex.remove(); return; }
+  function openColorsModal(){
+    var ex=document.getElementById('ap-colors-modal');
+    if(ex){ ex.remove(); return; }
 
-    var saved = readJSON(COLOR_KEY)||{};
-    var root  = document.documentElement;
+    var saved=readJSON(COLOR_KEY)||{};
+    var root=document.documentElement;
 
-    var modal = document.createElement('div');
-    modal.id = 'ap-colors-modal';
-    modal.innerHTML =
-      '<div class="ap-modal-hd">'+
+    var modal=document.createElement('div');
+    modal.id='ap-colors-modal';
+    modal.innerHTML=
+      '<div class="ap-modal-hd" id="ap-colors-hd">'+
         '<span>🎨 Brand Colors</span>'+
         '<button class="ap-modal-close" id="ap-colors-close">✕</button>'+
       '</div>'+
-      '<p class="ap-hint" style="padding:10px 16px 0">'+
-        'Swatches update the page instantly. Hit Save to keep changes.'+
-      '</p>'+
+      '<p class="ap-hint" style="padding:8px 16px 0;font-size:11px">Swatches update the page instantly. Save to keep changes.</p>'+
       '<div id="ap-swatches">'+
-        BRAND_COLORS.map(function(bc) {
-          var cur = saved[bc.varName] ||
-            root.style.getPropertyValue(bc.varName).trim() ||
-            getComputedStyle(root).getPropertyValue(bc.varName).trim() ||
-            bc.hex;
-          if (!cur||cur[0]!=='#') cur=bc.hex;
+        BRAND_COLORS.map(function(bc){
+          var cur=saved[bc.varName]||root.style.getPropertyValue(bc.varName).trim()||getComputedStyle(root).getPropertyValue(bc.varName).trim()||bc.hex;
+          if(!cur||cur[0]!=='#') cur=bc.hex;
           return '<div class="ap-swatch-row">'+
             '<label class="ap-swatch-lbl">'+escH(bc.label)+'</label>'+
             '<div class="ap-swatch-ctrl">'+
@@ -730,116 +962,119 @@
           '</div>';
         }).join('')+
       '</div>'+
-      '<div style="padding:12px 16px 16px">'+
+      '<div style="padding:10px 16px 14px">'+
         '<button id="ap-colors-save" class="ap-btn-full-primary">Save Colors</button>'+
       '</div>';
 
     document.body.appendChild(modal);
+    makeDraggable(modal, document.getElementById('ap-colors-hd'));
 
-    document.getElementById('ap-colors-close').addEventListener('click', function(){ modal.remove(); });
-
-    modal.querySelectorAll('.ap-swatch-inp').forEach(function(inp) {
-      inp.addEventListener('input', function() {
+    document.getElementById('ap-colors-close').addEventListener('click',function(){ modal.remove(); });
+    modal.querySelectorAll('.ap-swatch-inp').forEach(function(inp){
+      inp.addEventListener('input',function(){
         var varName=inp.getAttribute('data-var');
         var hex=inp.value;
-        root.style.setProperty(varName, hex);
-        var bc=BRAND_COLORS.find(function(c){return c.varName===varName;});
-        if (bc && bc.hslVar) root.style.setProperty(bc.hslVar, hexToHSL(hex));
+        root.style.setProperty(varName,hex);
+        var bc=BRAND_COLORS.find(function(c){ return c.varName===varName; });
+        if(bc && bc.hslVar) root.style.setProperty(bc.hslVar,hexToHSL(hex));
         var row=inp.closest('.ap-swatch-row');
-        if (row) { var hl=row.querySelector('.ap-swatch-hex'); if(hl) hl.textContent=hex; }
+        if(row){ var hl=row.querySelector('.ap-swatch-hex'); if(hl) hl.textContent=hex; }
+        S.dirty=true;
       });
     });
-
-    document.getElementById('ap-colors-save').addEventListener('click', function() {
+    document.getElementById('ap-colors-save').addEventListener('click',function(){
       var toSave={};
-      modal.querySelectorAll('.ap-swatch-inp').forEach(function(inp){
-        toSave[inp.getAttribute('data-var')]=inp.value;
-      });
-      localStorage.setItem(COLOR_KEY, JSON.stringify(toSave));
+      modal.querySelectorAll('.ap-swatch-inp').forEach(function(inp){ toSave[inp.getAttribute('data-var')]=inp.value; });
+      localStorage.setItem(COLOR_KEY,JSON.stringify(toSave));
+      S.dirty=false; /* colors are their own save */
       toast('Colors saved');
       modal.remove();
     });
   }
 
   /* ══════════════════════════════════════════════════════════════════
-     PROMO ELEMENTS (inject + manage)
+     PROMO ELEMENTS
   ══════════════════════════════════════════════════════════════════ */
-  function injectPromoElements() {
-    /* Banner */
-    if (!document.getElementById('ap-promo-banner')) {
-      var banner = document.createElement('div');
-      banner.id = 'ap-promo-banner';
+  var PROMO_STARTER = {
+    bannerActive: false,
+    bannerText: '✦ New! Summer Learning Series — Register by July 31st for early-bird pricing.',
+    bannerLink: '#contact',
+    sectionActive: false,
+    sectionHeading: 'Now Enrolling — Summer Learning Series',
+    sectionSub: 'Limited spots available. Personalized coaching designed to accelerate results.',
+    layout: 'cards',
+    cards: [
+      { title: 'GED Intensive Boot Camp', desc: 'A focused, hands-on program that takes students from preparation to credential in as little as 6 weeks.', ctaLabel: 'Learn More', ctaLink: '#contact' },
+      { title: 'Leadership & Communication', desc: 'Transform your team\u2019s dynamics with our proven 2-day seminar series, now available for summer scheduling.', ctaLabel: 'Book a Seminar', ctaLink: '#contact' },
+      { title: 'Homeschooling Starter Bundle', desc: 'Everything families need to start the new school year with confidence — curriculum planning, pacing guides, and live coaching.', ctaLabel: 'Get Started', ctaLink: '#contact' },
+    ]
+  };
+
+  function injectPromoElements(){
+    /* ── Banner (fixed, above everything) ── */
+    if(!document.getElementById('ap-promo-banner')){
+      var banner=document.createElement('div');
+      banner.id='ap-promo-banner';
       banner.setAttribute('data-promo-banner','');
       banner.setAttribute('data-key','promo.banner');
       banner.style.display='none';
-      banner.innerHTML =
+      banner.innerHTML=
         '<div id="ap-promo-banner-inner">'+
           '<span id="ap-promo-banner-text">✦ Special offer — limited time!</span>'+
           '<a id="ap-promo-banner-cta" href="#contact">Learn More</a>'+
         '</div>'+
         '<button id="ap-promo-banner-dismiss" title="Dismiss">✕</button>';
-      var hdr=document.querySelector('header');
-      if (hdr && hdr.parentNode) hdr.parentNode.insertBefore(banner, hdr.nextSibling);
-      else document.body.prepend(banner);
-      banner.querySelector('#ap-promo-banner-dismiss').addEventListener('click', function(){
+      document.body.prepend(banner);
+      banner.querySelector('#ap-promo-banner-dismiss').addEventListener('click',function(){
         banner.style.display='none';
+        updatePageOffsets();
       });
     }
 
-    /* Promo section (between services and testimonials) */
-    if (!document.getElementById('ap-promo-section')) {
-      var sec = document.createElement('section');
-      sec.id = 'ap-promo-section';
+    /* ── Promo Section (immediately after #hero) ── */
+    if(!document.getElementById('ap-promo-section')){
+      var sec=document.createElement('section');
+      sec.id='ap-promo-section';
       sec.setAttribute('data-promo-section','');
       sec.setAttribute('data-key','promo.section');
       sec.style.display='none';
-      sec.innerHTML =
+      sec.innerHTML=
         '<div class="ap-promo-sec-inner">'+
           '<h2 id="ap-promo-sec-heading">Featured Offer</h2>'+
           '<p id="ap-promo-sec-sub">A special opportunity for you.</p>'+
           '<div id="ap-promo-cards"></div>'+
         '</div>';
-      var svc = document.getElementById('services');
-      var tp  = document.getElementById('social-proof');
-      if (svc && tp && svc.parentNode) svc.parentNode.insertBefore(sec, tp);
+      var hero=document.getElementById('hero');
+      if(hero && hero.parentNode) hero.parentNode.insertBefore(sec, hero.nextSibling);
+      else document.body.appendChild(sec);
     }
-
-    /* Apply any saved promo state */
-    var pData = readJSON(PROMO_KEY);
-    if (pData) applyPromoData(pData);
   }
 
-  function applyPromoData(d) {
-    var banner = document.getElementById('ap-promo-banner');
-    var sec    = document.getElementById('ap-promo-section');
+  function applyPromoData(d){
+    var banner=document.getElementById('ap-promo-banner');
+    var sec=document.getElementById('ap-promo-section');
 
-    if (banner) {
-      banner.style.display = d.bannerActive ? '' : 'none';
-      if (d.bannerText) {
-        var bt=banner.querySelector('#ap-promo-banner-text');
-        if(bt) bt.textContent=d.bannerText;
-      }
-      if (d.bannerLink) {
-        var bl=banner.querySelector('#ap-promo-banner-cta');
-        if(bl) bl.href=d.bannerLink;
-      }
+    if(banner){
+      banner.style.display=d.bannerActive?'':'none';
+      var bt=banner.querySelector('#ap-promo-banner-text');
+      if(bt && d.bannerText) bt.textContent=d.bannerText;
+      var bl=banner.querySelector('#ap-promo-banner-cta');
+      if(bl && d.bannerLink) bl.href=d.bannerLink;
     }
-
-    if (sec) {
-      sec.style.display = d.sectionActive ? '' : 'none';
+    if(sec){
+      sec.style.display=d.sectionActive?'':'none';
       var sh=sec.querySelector('#ap-promo-sec-heading');
       var ss=sec.querySelector('#ap-promo-sec-sub');
       if(sh && d.sectionHeading) sh.textContent=d.sectionHeading;
-      if(ss && d.sectionSub)     ss.textContent=d.sectionSub;
+      if(ss && d.sectionSub) ss.textContent=d.sectionSub;
       var cards=sec.querySelector('#ap-promo-cards');
-      if (cards && d.cards && d.cards.length) {
-        renderPromoCards(cards, d.cards, d.layout||'cards');
-      }
+      if(cards && d.cards && d.cards.length) renderPromoCards(cards,d.cards,d.layout||'cards');
     }
+    updatePageOffsets();
   }
 
-  function renderPromoCards(container, cards, layout) {
-    if (layout==='hero' && cards[0]) {
+  function renderPromoCards(container,cards,layout){
+    if(layout==='hero' && cards[0]){
       var c=cards[0];
       container.className='ap-promo-hero';
       container.innerHTML=
@@ -864,29 +1099,29 @@
     }
   }
 
-  /* ── Promo Editor Modal ──────────────────────────────────────────*/
-  function openPromoModal() {
-    var ex = document.getElementById('ap-promo-modal');
-    if (ex) { ex.remove(); return; }
+  /* ── Promo Editor Modal (movable) ───────────────────────────────*/
+  function openPromoModal(){
+    var ex=document.getElementById('ap-promo-modal');
+    if(ex){ ex.remove(); return; }
 
-    var d = readJSON(PROMO_KEY) || {
-      bannerActive:false, bannerText:'✦ Special offer — limited time!', bannerLink:'#contact',
-      sectionActive:false, sectionHeading:'Featured Offer', sectionSub:'A special opportunity for you.',
-      layout:'cards',
-      cards:[{ title:'New Offer', desc:'Describe your offer here.', ctaLabel:'Learn More', ctaLink:'#contact' }]
-    };
+    /* First-time: use PROMO_STARTER if no saved promo data */
+    var hasSaved=!!localStorage.getItem(PROMO_KEY);
+    var d=hasSaved ? (readJSON(PROMO_KEY)||PROMO_STARTER) : PROMO_STARTER;
 
-    var modal = document.createElement('div');
+    var modal=document.createElement('div');
     modal.id='ap-promo-modal';
     modal.innerHTML=
-      '<div class="ap-modal-hd">'+
+      '<div class="ap-modal-hd" id="ap-promo-hd">'+
         '<span>✦ Promo Editor</span>'+
-        '<button class="ap-modal-close" id="ap-promo-close">✕</button>'+
+        '<div style="display:flex;gap:4px">'+
+          '<button id="ap-promo-min" class="ap-modal-close" title="Minimize">–</button>'+
+          '<button class="ap-modal-close" id="ap-promo-close" title="Close">✕</button>'+
+        '</div>'+
       '</div>'+
+      '<div id="ap-promo-body">'+
       '<div class="ap-promo-block">'+
         '<label class="ap-toggle-row">'+
-          '<input type="checkbox" id="ap-promo-ba" '+(d.bannerActive?'checked':'')+' />'+
-          ' Show Promo Banner'+
+          '<input type="checkbox" id="ap-promo-ba"'+(d.bannerActive?' checked':'')+' /> Show Promo Banner'+
         '</label>'+
         '<div class="ap-promo-sub" id="ap-promo-bfields" style="display:'+(d.bannerActive?'':'none')+'">'+
           '<label class="ap-lbl">Banner Text</label>'+
@@ -897,8 +1132,7 @@
       '</div>'+
       '<div class="ap-promo-block">'+
         '<label class="ap-toggle-row">'+
-          '<input type="checkbox" id="ap-promo-sa" '+(d.sectionActive?'checked':'')+' />'+
-          ' Show Promo Section'+
+          '<input type="checkbox" id="ap-promo-sa"'+(d.sectionActive?' checked':'')+' /> Show Promo Section'+
         '</label>'+
         '<div class="ap-promo-sub" id="ap-promo-sfields" style="display:'+(d.sectionActive?'':'none')+'">'+
           '<label class="ap-lbl">Heading</label>'+
@@ -907,19 +1141,29 @@
           '<input class="ap-inp" id="ap-promo-ssub" value="'+escH(d.sectionSub||'')+'" />'+
           '<label class="ap-lbl">Layout</label>'+
           '<select class="ap-inp" id="ap-promo-layout">'+
-            '<option value="cards" '+(d.layout==='cards'?'selected':'')+'>Cards (max 3 recommended)</option>'+
-            '<option value="hero" '+(d.layout==='hero'?'selected':'')+'>Hero (single)</option>'+
+            '<option value="cards"'+(d.layout==='cards'?' selected':'')+'>Cards (max 3 recommended)</option>'+
+            '<option value="hero"'+(d.layout==='hero'?' selected':'')+'>Hero (single)</option>'+
           '</select>'+
-          '<div id="ap-promo-card-editor">'+buildPromoCardEditor(d.cards||[], d.layout||'cards')+'</div>'+
+          '<div id="ap-promo-card-editor">'+buildPromoCardEditor(d.cards||[],d.layout||'cards')+'</div>'+
         '</div>'+
       '</div>'+
       '<div style="padding:12px 16px 16px">'+
         '<button id="ap-promo-save" class="ap-btn-full-primary">Save Promo</button>'+
+      '</div>'+
       '</div>';
 
     document.body.appendChild(modal);
+    makeDraggable(modal, document.getElementById('ap-promo-hd'));
 
-    document.getElementById('ap-promo-close').addEventListener('click',function(){modal.remove();});
+    /* Minimize */
+    document.getElementById('ap-promo-min').addEventListener('click',function(){
+      var body=document.getElementById('ap-promo-body');
+      var btn=document.getElementById('ap-promo-min');
+      if(body.style.display==='none'){ body.style.display=''; btn.textContent='–'; }
+      else { body.style.display='none'; btn.textContent='□'; }
+    });
+
+    document.getElementById('ap-promo-close').addEventListener('click',function(){ modal.remove(); });
     document.getElementById('ap-promo-ba').addEventListener('change',function(e){
       document.getElementById('ap-promo-bfields').style.display=e.target.checked?'':'none';
     });
@@ -928,78 +1172,65 @@
     });
     document.getElementById('ap-promo-layout').addEventListener('change',function(){
       var lyt=document.getElementById('ap-promo-layout').value;
-      document.getElementById('ap-promo-card-editor').innerHTML=
-        buildPromoCardEditor(collectPromoCards(), lyt);
+      document.getElementById('ap-promo-card-editor').innerHTML=buildPromoCardEditor(collectPromoCards(),lyt);
       wirePromoButtons();
     });
     wirePromoButtons();
 
     document.getElementById('ap-promo-save').addEventListener('click',function(){
       var newData={
-        bannerActive: document.getElementById('ap-promo-ba').checked,
-        bannerText:   document.getElementById('ap-promo-btxt').value,
-        bannerLink:   document.getElementById('ap-promo-blnk').value,
+        bannerActive:document.getElementById('ap-promo-ba').checked,
+        bannerText:document.getElementById('ap-promo-btxt').value,
+        bannerLink:document.getElementById('ap-promo-blnk').value,
         sectionActive:document.getElementById('ap-promo-sa').checked,
         sectionHeading:document.getElementById('ap-promo-shd').value,
-        sectionSub:   document.getElementById('ap-promo-ssub').value,
-        layout:       document.getElementById('ap-promo-layout').value,
-        cards:        collectPromoCards(),
+        sectionSub:document.getElementById('ap-promo-ssub').value,
+        layout:document.getElementById('ap-promo-layout').value,
+        cards:collectPromoCards(),
       };
-      localStorage.setItem(PROMO_KEY, JSON.stringify(newData));
+      localStorage.setItem(PROMO_KEY,JSON.stringify(newData));
       applyPromoData(newData);
+      S.dirty=false;
       toast('Promo saved');
       modal.remove();
     });
   }
 
-  function buildPromoCardEditor(cards, layout) {
-    if (layout==='hero') {
+  function buildPromoCardEditor(cards,layout){
+    if(layout==='hero'){
       var c=cards[0]||{};
       return '<div class="ap-promo-card-form" data-ci="0">'+
         '<div class="ap-promo-card-form-title">Hero Card</div>'+
-        '<label class="ap-lbl">Headline</label>'+
-        '<input class="ap-inp" data-cf="title" value="'+escH(c.title||'')+'" />'+
-        '<label class="ap-lbl">Supporting Text</label>'+
-        '<textarea class="ap-inp" data-cf="desc" rows="2">'+escH(c.desc||'')+'</textarea>'+
-        '<label class="ap-lbl">CTA Label</label>'+
-        '<input class="ap-inp" data-cf="ctaLabel" value="'+escH(c.ctaLabel||'')+'" />'+
-        '<label class="ap-lbl">CTA Link / URL</label>'+
-        '<input class="ap-inp" data-cf="ctaLink" value="'+escH(c.ctaLink||'')+'" />'+
+        '<label class="ap-lbl">Headline</label><input class="ap-inp" data-cf="title" value="'+escH(c.title||'')+'" />'+
+        '<label class="ap-lbl">Supporting Text</label><textarea class="ap-inp" data-cf="desc" rows="2">'+escH(c.desc||'')+'</textarea>'+
+        '<label class="ap-lbl">CTA Label</label><input class="ap-inp" data-cf="ctaLabel" value="'+escH(c.ctaLabel||'')+'" />'+
+        '<label class="ap-lbl">CTA Link / URL</label><input class="ap-inp" data-cf="ctaLink" value="'+escH(c.ctaLink||'')+'" />'+
         '</div>';
     }
     var max=3;
     return cards.slice(0,max).map(function(c,i){
       return '<div class="ap-promo-card-form" data-ci="'+i+'">'+
-        '<div class="ap-promo-card-form-title">Card '+(i+1)+
-          ' <button class="ap-rm-card" data-ri="'+i+'">–</button></div>'+
-        '<label class="ap-lbl">Title</label>'+
-        '<input class="ap-inp" data-cf="title" value="'+escH(c.title||'')+'" />'+
-        '<label class="ap-lbl">Description</label>'+
-        '<textarea class="ap-inp" data-cf="desc" rows="2">'+escH(c.desc||'')+'</textarea>'+
-        '<label class="ap-lbl">CTA Label</label>'+
-        '<input class="ap-inp" data-cf="ctaLabel" value="'+escH(c.ctaLabel||'')+'" />'+
-        '<label class="ap-lbl">CTA Link / URL</label>'+
-        '<input class="ap-inp" data-cf="ctaLink" value="'+escH(c.ctaLink||'')+'" />'+
+        '<div class="ap-promo-card-form-title">Card '+(i+1)+' <button class="ap-rm-card" data-ri="'+i+'">−</button></div>'+
+        '<label class="ap-lbl">Title</label><input class="ap-inp" data-cf="title" value="'+escH(c.title||'')+'" />'+
+        '<label class="ap-lbl">Description</label><textarea class="ap-inp" data-cf="desc" rows="2">'+escH(c.desc||'')+'</textarea>'+
+        '<label class="ap-lbl">CTA Label</label><input class="ap-inp" data-cf="ctaLabel" value="'+escH(c.ctaLabel||'')+'" />'+
+        '<label class="ap-lbl">CTA Link / URL</label><input class="ap-inp" data-cf="ctaLink" value="'+escH(c.ctaLink||'')+'" />'+
         '</div>';
     }).join('')+
     (cards.length<max
-      ? '<button id="ap-add-card" class="ap-add-btn">+ Add Card'+(cards.length===max-1?' (max 3 recommended)':'')+'</button>'
-      : '<p class="ap-hint" style="padding:6px 0">3 cards recommended. Save and toggle layout for more.</p>');
+      ? '<button id="ap-add-card" class="ap-add-btn">+ Add Card</button>'
+      : '<p class="ap-hint" style="padding:4px 0">3 cards is the recommended maximum.</p>');
   }
 
-  function collectPromoCards() {
+  function collectPromoCards(){
     return Array.from(document.querySelectorAll('.ap-promo-card-form')).map(function(form){
-      var card={};
-      form.querySelectorAll('[data-cf]').forEach(function(inp){
-        card[inp.getAttribute('data-cf')]=inp.value;
-      });
-      return card;
+      var card={}; form.querySelectorAll('[data-cf]').forEach(function(inp){ card[inp.getAttribute('data-cf')]=inp.value; }); return card;
     });
   }
 
-  function wirePromoButtons() {
+  function wirePromoButtons(){
     var addBtn=document.getElementById('ap-add-card');
-    if (addBtn) {
+    if(addBtn){
       addBtn.addEventListener('click',function(){
         var cards=collectPromoCards();
         cards.push({title:'New Card',desc:'',ctaLabel:'Learn More',ctaLink:'#contact'});
@@ -1012,8 +1243,7 @@
       btn.addEventListener('click',function(e){
         e.stopPropagation();
         var idx=parseInt(btn.getAttribute('data-ri'),10);
-        var cards=collectPromoCards();
-        cards.splice(idx,1);
+        var cards=collectPromoCards(); cards.splice(idx,1);
         var lyt=document.getElementById('ap-promo-layout').value;
         document.getElementById('ap-promo-card-editor').innerHTML=buildPromoCardEditor(cards,lyt);
         wirePromoButtons();
@@ -1024,36 +1254,45 @@
   /* ══════════════════════════════════════════════════════════════════
      PREVIEW
   ══════════════════════════════════════════════════════════════════ */
-  function enterPreview() {
+  function enterPreview(){
     S.previewMode=true;
     commitActive();
     document.body.classList.add('ap-preview-mode');
-    var tb=document.getElementById('ap-toolbar');
-    if(tb) tb.style.display='none';
-    var panel=document.getElementById('ap-panel');
-    if(panel) panel.style.display='none';
+    var tb=document.getElementById('ap-toolbar'); if(tb) tb.style.display='none';
+    var panel=document.getElementById('ap-panel'); if(panel) panel.style.display='none';
+    var cm=document.getElementById('ap-colors-modal'); if(cm) cm.style.display='none';
+    var pm=document.getElementById('ap-promo-modal'); if(pm) pm.style.display='none';
+
+    /* Remove toolbar from offset calculation temporarily */
+    var hdr=document.querySelector('header');
+    var banner=document.getElementById('ap-promo-banner');
+    var bannerH=(banner && banner.style.display!=='none') ? (banner.offsetHeight||40) : 0;
+    document.body.style.paddingTop=bannerH+'px';
+    if(hdr) hdr.style.top=bannerH+'px';
 
     var bar=document.createElement('div');
     bar.id='ap-preview-bar';
     bar.innerHTML='<span>👁 Preview Mode</span><button id="ap-exit-preview">Exit Preview</button>';
     document.body.appendChild(bar);
-
     document.getElementById('ap-exit-preview').addEventListener('click',function(){
       S.previewMode=false;
       document.body.classList.remove('ap-preview-mode');
       bar.remove();
-      var tb=document.getElementById('ap-toolbar'); if(tb) tb.style.display='';
-      var panel=document.getElementById('ap-panel'); if(panel) panel.style.display='';
+      var tb2=document.getElementById('ap-toolbar'); if(tb2) tb2.style.display='';
+      var panel2=document.getElementById('ap-panel'); if(panel2) panel2.style.display='';
+      var cm2=document.getElementById('ap-colors-modal'); if(cm2) cm2.style.display='';
+      var pm2=document.getElementById('ap-promo-modal'); if(pm2) pm2.style.display='';
+      updatePageOffsets();
     });
   }
 
   /* ══════════════════════════════════════════════════════════════════
      BOOT
   ══════════════════════════════════════════════════════════════════ */
-  if (document.readyState==='loading') {
-    document.addEventListener('DOMContentLoaded', function(){ setTimeout(init, DELAY); });
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',function(){ setTimeout(init,DELAY); });
   } else {
-    setTimeout(init, DELAY);
+    setTimeout(init,DELAY);
   }
 
 }());

@@ -513,7 +513,8 @@ export default function Home() {
                         <div className="flex gap-1">
                           {[...Array(5)].map((_, j) => <Star key={j} size={15} className="text-[#CAA747] fill-[#CAA747]" />)}
                         </div>
-                        <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Alignable</span>
+                        <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide"
+                          {...(i < testimonials.length ? {'data-key': `testimonials.item-${i}-source`} : {})}>Alignable</span>
                       </div>
 
                       {/* Quote */}
@@ -595,7 +596,8 @@ export default function Home() {
                     <div className="absolute inset-0 bg-primary rounded-full transform translate-y-2 translate-x-2 opacity-0 group-hover:opacity-20 transition-all duration-300" />
                     <img src={member.img} alt={member.name}
                       className="w-40 h-40 sm:w-48 sm:h-48 md:w-60 md:h-60 lg:w-64 lg:h-64 object-cover object-center rounded-full shadow-md border-4 border-white relative z-10"
-                      data-testid={`img-team-${member.name.split(' ')[0].toLowerCase()}`} />
+                      data-testid={`img-team-${member.name.split(' ')[0].toLowerCase()}`}
+                      data-editable-image="" data-key={`team.member-${i}-photo`} />
                   </div>
                   <h4 className="text-lg sm:text-xl font-serif font-semibold" data-key={`team.member-${i}-name`}>
                     {member.name}
