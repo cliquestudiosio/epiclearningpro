@@ -1,41 +1,40 @@
-/* ═══════════════════════════════════════════════════
-   Epic Learning Pro — Admin Portal CSS  (Path A)
-   Keys and class names here are permanent.
-   Storage layer will change; these selectors won't.
-═══════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════
+   Admin Portal — Editor Chrome  (Path A · permanent design system)
+   These selectors and class names are final and won't change.
+   Only the storage layer changes when we move to the real backend.
 
-/* ── Gear button ─────────────────────────────────── */
+   Color principles (works on every client color scheme):
+   • Outlines  — soft sky-blue, semi-transparent: visible on light & dark
+   • Toolbar   — near-black neutral, white text: readable on any bg
+   • Gear icon — inline, low-opacity, inherits footer text color
+═══════════════════════════════════════════════════════════════════ */
+
+/* ── Gear icon (inline in footer credit line) ─────────────────── */
 #ap-gear {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 99998;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #5B2DA8, #8B5FE6);
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 16px rgba(91,45,168,0.5);
-  transition: transform 0.25s, box-shadow 0.25s, opacity 0.25s;
-  opacity: 0.65;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.38;
+  padding: 0 0 0 6px;
+  line-height: 1;
+  vertical-align: middle;
+  transition: opacity 0.2s, transform 0.25s;
 }
 #ap-gear:hover {
-  opacity: 1;
-  transform: scale(1.1) rotate(35deg);
-  box-shadow: 0 8px 28px rgba(91,45,168,0.65);
+  opacity: 0.9;
+  transform: rotate(40deg);
 }
 
-/* ── Login overlay ───────────────────────────────── */
+/* ── Login overlay ────────────────────────────────────────────── */
 #ap-login-overlay {
   position: fixed;
   inset: 0;
   z-index: 99999;
-  background: rgba(10,4,26,0.6);
+  background: rgba(5, 3, 15, 0.65);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -47,7 +46,7 @@
   padding: 38px 36px 30px;
   width: 340px;
   max-width: 90vw;
-  box-shadow: 0 28px 72px rgba(0,0,0,0.28);
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.3);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -56,7 +55,7 @@
 #ap-login-logo {
   font-size: 17px;
   font-weight: 700;
-  color: #5B2DA8;
+  color: #111;
 }
 #ap-login-sub {
   font-size: 12px;
@@ -82,7 +81,7 @@
 #ap-login-modal input[type="password"] {
   width: 100%;
   padding: 12px 14px;
-  border: 2px solid #e5dff8;
+  border: 2px solid #e5e7eb;
   border-radius: 10px;
   font-size: 16px;
   outline: none;
@@ -90,9 +89,9 @@
   box-sizing: border-box;
   font-family: inherit;
 }
-#ap-login-modal input[type="password"]:focus { border-color: #8B5FE6; }
+#ap-login-modal input[type="password"]:focus { border-color: #3b82f6; }
 #ap-login-btn {
-  background: linear-gradient(135deg,#5B2DA8,#8B5FE6);
+  background: #111;
   color: #fff;
   border: none;
   border-radius: 10px;
@@ -100,10 +99,10 @@
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: background 0.2s;
   font-family: inherit;
 }
-#ap-login-btn:hover { opacity: 0.88; }
+#ap-login-btn:hover { background: #333; }
 #ap-login-cancel {
   background: none;
   border: none;
@@ -116,17 +115,18 @@
 }
 #ap-login-cancel:hover { color: #555; }
 
-/* ── Toolbar ─────────────────────────────────────── */
+/* ── Toolbar (near-black — readable on any site background) ────── */
 #ap-toolbar {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 99997;
-  background: #140827;
+  background: rgba(10, 10, 18, 0.97);
   color: #fff;
-  box-shadow: 0 2px 20px rgba(0,0,0,0.45);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.06), 0 4px 24px rgba(0,0,0,0.5);
   font-family: system-ui, -apple-system, sans-serif;
+  backdrop-filter: blur(8px);
 }
 #ap-toolbar-inner {
   display: flex;
@@ -139,83 +139,86 @@
 }
 #ap-toolbar-label {
   font-weight: 600;
-  color: #c4a6ff;
   font-size: 13px;
+  color: #e2e8f0;
   white-space: nowrap;
 }
-#ap-toolbar-mode { color: #9d7de8; font-weight: 400; }
+#ap-toolbar-mode { color: #94a3b8; font-weight: 400; }
 #ap-toolbar-actions {
   display: flex;
-  gap: 7px;
+  gap: 6px;
   align-items: center;
   flex-wrap: wrap;
 }
 #ap-toolbar button {
-  padding: 7px 13px;
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.14);
+  padding: 6px 13px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,0.12);
   background: rgba(255,255,255,0.07);
-  color: #fff;
+  color: #e2e8f0;
   font-size: 12px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;
   font-family: inherit;
 }
-#ap-toolbar button:hover { background: rgba(255,255,255,0.18); }
+#ap-toolbar button:hover {
+  background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.22);
+}
 #ap-toolbar .ap-btn-primary {
-  background: #8B5FE6;
-  border-color: #8B5FE6;
+  background: rgba(59,130,246,0.8);
+  border-color: rgba(59,130,246,0.9);
   font-weight: 600;
 }
-#ap-toolbar .ap-btn-primary:hover { background: #7341d4; }
-#ap-toolbar .ap-btn-danger {
-  border-color: rgba(239,68,68,0.4);
-}
-#ap-toolbar .ap-btn-danger:hover { background: rgba(239,68,68,0.18); }
+#ap-toolbar .ap-btn-primary:hover { background: rgba(37,99,235,0.9); }
+#ap-toolbar .ap-btn-danger { border-color: rgba(239,68,68,0.35); color: #fca5a5; }
+#ap-toolbar .ap-btn-danger:hover { background: rgba(239,68,68,0.15); }
 
-/* Push content below toolbar */
+/* Push page content below toolbar */
 body.ap-edit-mode { padding-top: 48px !important; }
 
-/* ── Editable element states ─────────────────────── */
+/* ── Editable element states ─────────────────────────────────── */
+/* Soft sky-blue outline — visible on both light & dark sections */
 body.ap-edit-mode [data-editable] {
-  outline: 2px dashed rgba(139,95,230,0.35);
+  outline: 1.5px dashed rgba(99, 179, 237, 0.55);
   outline-offset: 3px;
   border-radius: 3px;
   cursor: text;
   transition: outline-color 0.15s, background 0.15s;
+  position: relative;
 }
 body.ap-edit-mode [data-editable]:hover {
-  outline-color: rgba(139,95,230,0.85);
-  background: rgba(139,95,230,0.05) !important;
+  outline: 2px dashed rgba(59, 130, 246, 0.85);
+  outline-color: rgba(59, 130, 246, 0.85);
+  background: rgba(59, 130, 246, 0.06) !important;
 }
 body.ap-edit-mode [data-editable].ap-editing {
-  outline: 2px solid #8B5FE6 !important;
-  background: rgba(139,95,230,0.07) !important;
+  outline: 2px solid rgba(59, 130, 246, 1) !important;
+  background: rgba(59, 130, 246, 0.08) !important;
   cursor: text;
 }
 
-/* List section highlight (non-editable, just visual) */
+/* List section highlight */
 body.ap-edit-mode [data-editable-list] {
-  outline: 2px dashed rgba(202,167,71,0.3);
-  outline-offset: 6px;
+  outline: 1.5px dashed rgba(251, 191, 36, 0.35);
+  outline-offset: 8px;
   border-radius: 6px;
 }
 
-/* Image elements — make clickable in edit mode */
+/* Image tagging — override pointer-events:none from global rule */
 body.ap-edit-mode [data-editable-image] {
   pointer-events: auto !important;
   cursor: pointer;
-  outline: 2px dashed rgba(139,95,230,0.35);
-  outline-offset: 3px;
-  border-radius: 50%;
+  outline: 2px dashed rgba(99, 179, 237, 0.55);
+  outline-offset: 4px;
   transition: outline-color 0.15s;
 }
 body.ap-edit-mode [data-editable-image]:hover {
-  outline-color: rgba(139,95,230,0.85);
+  outline-color: rgba(59, 130, 246, 0.85);
 }
 
-/* Hide outlines in preview */
+/* Strip all edit chrome in preview mode */
 body.ap-preview-mode [data-editable],
 body.ap-preview-mode [data-editable-list],
 body.ap-preview-mode [data-editable-image] {
@@ -224,15 +227,15 @@ body.ap-preview-mode [data-editable-image] {
   cursor: default !important;
 }
 
-/* ── Preview bar ─────────────────────────────────── */
+/* ── Preview bar ─────────────────────────────────────────────── */
 #ap-preview-bar {
   position: fixed;
   bottom: 22px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 99999;
-  background: #140827;
-  color: #c4a6ff;
+  background: rgba(10, 10, 18, 0.95);
+  color: #94a3b8;
   padding: 10px 22px;
   border-radius: 40px;
   display: flex;
@@ -240,11 +243,12 @@ body.ap-preview-mode [data-editable-image] {
   gap: 16px;
   font-size: 13px;
   font-family: system-ui, sans-serif;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   white-space: nowrap;
+  backdrop-filter: blur(8px);
 }
 #ap-exit-preview {
-  background: #8B5FE6;
+  background: rgba(59, 130, 246, 0.85);
   border: none;
   color: #fff;
   padding: 7px 18px;
@@ -253,27 +257,30 @@ body.ap-preview-mode [data-editable-image] {
   cursor: pointer;
   font-weight: 600;
   font-family: inherit;
+  transition: background 0.2s;
 }
-#ap-exit-preview:hover { background: #7341d4; }
+#ap-exit-preview:hover { background: rgba(37, 99, 235, 0.9); }
 
-/* ── Toast ───────────────────────────────────────── */
+/* ── Toast ───────────────────────────────────────────────────── */
 #ap-toast {
   position: fixed;
-  bottom: 82px;
-  right: 24px;
+  bottom: 28px;
+  right: 28px;
   z-index: 99999;
-  background: #140827;
-  color: #fff;
+  background: rgba(10, 10, 18, 0.95);
+  color: #e2e8f0;
   padding: 12px 20px;
   border-radius: 10px;
   font-size: 14px;
   font-family: system-ui, sans-serif;
-  box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 0.3s, transform 0.3s;
   max-width: 320px;
   pointer-events: none;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.07);
 }
 #ap-toast.ap-toast-visible {
   opacity: 1;

@@ -2,9 +2,8 @@
  * Epic Learning Pro — Admin Portal (Path A · localStorage)
  *
  * All data-key values and data-editable* attributes are permanent.
- * Only the storage layer (localStorage) is temporary — it will be
- * replaced with real API calls when the Cloudflare backend is ready.
- * Nothing in the site HTML needs to change at that point.
+ * Storage layer (localStorage) is temporary — will be replaced with
+ * real API calls when the Cloudflare backend is ready. No re-tagging needed.
  *
  * Path A PIN: 8421  (share only with authorised users)
  */
@@ -12,30 +11,28 @@
   'use strict';
 
   /* ── Config ─────────────────────────────────────────────────────── */
-  var script = document.currentScript
-    || document.querySelector('script[data-site-id]');
+  var script      = document.currentScript
+                 || document.querySelector('script[data-site-id]');
   var SITE_ID     = script ? script.getAttribute('data-site-id') : 'site_unknown';
-  var STORAGE_KEY = 'ap-content-'      + SITE_ID;
-  var ORIG_KEY    = 'ap-original-'     + SITE_ID;
-  var ORIG_DATE   = 'ap-orig-date-'    + SITE_ID;
-  var PIN         = '8421';            // Path A — replace with real auth later
-  var REACT_DELAY = 350;              // ms to wait for React first paint
+  var STORAGE_KEY = 'ap-content-'   + SITE_ID;
+  var ORIG_KEY    = 'ap-original-'  + SITE_ID;
+  var ORIG_DATE   = 'ap-orig-date-' + SITE_ID;
+  var PIN         = '8421';
+  var DELAY       = 350; // ms — gives React time to paint before we apply saved content
 
   /* ── State ──────────────────────────────────────────────────────── */
   var editMode    = false;
   var previewMode = false;
   var activeEl    = null;
 
-  /* ── Helpers ────────────────────────────────────────────────────── */
-  function isDesktop() { return window.innerWidth >= 1024; }
-
+  /* ── Utilities ──────────────────────────────────────────────────── */
   function editables() {
     return Array.from(document.querySelectorAll('[data-editable][data-key]'));
   }
 
   function toast(msg) {
-    var existing = document.getElementById('ap-toast');
-    if (existing) existing.remove();
+    var old = document.getElementById('ap-toast');
+    if (old) old.remove();
     var t = document.createElement('div');
     t.id = 'ap-toast';
     t.textContent = msg;
@@ -78,38 +75,40 @@
 
   /* ── Init ───────────────────────────────────────────────────────── */
   function init() {
-    /* Inject stylesheet */
-    if (!document.getElementById('ap-css')) {
-      var link = document.createElement('link');
-      link.id  = 'ap-css';
-      link.rel = 'stylesheet';
-      link.href = '/admin-portal.css';
-      document.head.appendChild(link);
-    }
+    injectStylesheet();
 
-    /* Apply saved content */
     var saved = readJSON(STORAGE_KEY);
     if (saved) applySnap(saved);
 
-    /* Capture original snapshot (once, then never overwrite) */
+    /* Capture original snapshot once — never overwrite */
     if (!localStorage.getItem(ORIG_DATE)) {
       localStorage.setItem(ORIG_KEY, JSON.stringify(snapshot()));
       localStorage.setItem(ORIG_DATE, String(Date.now()));
     }
 
-    /* Inject gear icon — desktop only */
-    if (isDesktop()) injectGear();
+    injectGear();
   }
 
-  /* ── Gear ───────────────────────────────────────────────────────── */
+  function injectStylesheet() {
+    if (document.getElementById('ap-css')) return;
+    var link = document.createElement('link');
+    link.id  = 'ap-css';
+    link.rel = 'stylesheet';
+    link.href = '/admin-portal.css';
+    document.head.appendChild(link);
+  }
+
+  /* ── Gear (inline in footer credit) ────────────────────────────── */
   function injectGear() {
-    if (document.getElementById('ap-gear')) return;
+    var anchor = document.getElementById('ap-gear-anchor');
+    if (!anchor || document.getElementById('ap-gear')) return;
     var btn = document.createElement('button');
-    btn.id    = 'ap-gear';
+    btn.id = 'ap-gear';
     btn.title = 'Admin Editor';
     btn.setAttribute('aria-label', 'Open admin editor');
+    /* Small gear SVG */
     btn.innerHTML =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" ' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" ' +
       'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
       'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25' +
@@ -122,7 +121,7 @@
       'l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2' +
       ' 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>' +
       '<circle cx="12" cy="12" r="3"/></svg>';
-    document.body.appendChild(btn);
+    anchor.appendChild(btn);
     btn.addEventListener('click', function () {
       if (!editMode) showLogin();
     });
@@ -130,12 +129,13 @@
 
   /* ── Login modal ────────────────────────────────────────────────── */
   function showLogin() {
+    if (document.getElementById('ap-login-overlay')) return;
     var overlay = document.createElement('div');
     overlay.id = 'ap-login-overlay';
     overlay.innerHTML =
       '<div id="ap-login-modal">' +
         '<div id="ap-login-logo">⚙ Admin Editor</div>' +
-        '<p id="ap-login-sub">Epic Learning Pro · Local Preview Mode</p>' +
+        '<p id="ap-login-sub">Local Preview Mode · ' + SITE_ID + '</p>' +
         '<div id="ap-login-error" style="display:none">Incorrect PIN — please try again.</div>' +
         '<label for="ap-pin-input">Developer PIN</label>' +
         '<input type="password" id="ap-pin-input" placeholder="Enter PIN" ' +
@@ -147,7 +147,7 @@
 
     var input  = overlay.querySelector('#ap-pin-input');
     var errBox = overlay.querySelector('#ap-login-error');
-    input.focus();
+    setTimeout(function () { input.focus(); }, 50);
 
     function attempt() {
       if (input.value === PIN) {
@@ -212,14 +212,11 @@
     if (previewMode) return;
     e.stopPropagation();
     var el = e.currentTarget;
-
     if (activeEl && activeEl !== el) commitActive();
-
     activeEl = el;
     el.contentEditable = 'true';
     el.classList.add('ap-editing');
     el.focus();
-
     /* Place cursor at click position */
     if (document.caretRangeFromPoint) {
       var range = document.caretRangeFromPoint(e.clientX, e.clientY);
@@ -235,10 +232,8 @@
   function showToolbar() {
     if (document.getElementById('ap-toolbar')) return;
 
-    var origDate = localStorage.getItem(ORIG_DATE);
-    var ageDays  = origDate
-      ? (Date.now() - parseInt(origDate, 10)) / 86400000
-      : 0;
+    var origDate   = localStorage.getItem(ORIG_DATE);
+    var ageDays    = origDate ? (Date.now() - parseInt(origDate, 10)) / 86400000 : 0;
     var canRestore = ageDays < 14;
 
     var tb = document.createElement('div');
@@ -249,8 +244,7 @@
           '<span id="ap-toolbar-mode">· Editing</span></span>' +
         '<div id="ap-toolbar-actions">' +
           (canRestore
-            ? '<button id="ap-btn-restore" class="ap-btn-danger">' +
-                '↩ Restore Original</button>'
+            ? '<button id="ap-btn-restore" class="ap-btn-danger">↩ Restore Original</button>'
             : '') +
           '<button id="ap-btn-preview">👁 Preview</button>' +
           '<button id="ap-btn-save" class="ap-btn-primary">💾 Save</button>' +
@@ -264,14 +258,13 @@
       saveContent();
       toast('Saved (local preview mode)');
     });
-
     document.getElementById('ap-btn-preview').addEventListener('click', enterPreview);
     document.getElementById('ap-btn-exit').addEventListener('click', exitEditMode);
 
     var restoreBtn = document.getElementById('ap-btn-restore');
     if (restoreBtn) {
       restoreBtn.addEventListener('click', function () {
-        if (!confirm('Restore to the original version?\nAll saved edits will be removed.')) return;
+        if (!confirm('Restore to the original version?\nAll saved edits will be cleared.')) return;
         localStorage.removeItem(STORAGE_KEY);
         toast('Restored — reloading…');
         setTimeout(function () { location.reload(); }, 1200);
@@ -279,7 +272,7 @@
     }
   }
 
-  /* ── Preview mode ───────────────────────────────────────────────── */
+  /* ── Preview ────────────────────────────────────────────────────── */
   function enterPreview() {
     previewMode = true;
     commitActive();
@@ -290,8 +283,7 @@
     var bar = document.createElement('div');
     bar.id = 'ap-preview-bar';
     bar.innerHTML =
-      '<span>👁 Preview Mode</span>' +
-      '<button id="ap-exit-preview">Exit Preview</button>';
+      '<span>👁 Preview Mode</span><button id="ap-exit-preview">Exit Preview</button>';
     document.body.appendChild(bar);
 
     document.getElementById('ap-exit-preview').addEventListener('click', function () {
@@ -306,10 +298,10 @@
   /* ── Boot ───────────────────────────────────────────────────────── */
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
-      setTimeout(init, REACT_DELAY);
+      setTimeout(init, DELAY);
     });
   } else {
-    setTimeout(init, REACT_DELAY);
+    setTimeout(init, DELAY);
   }
 
 }());

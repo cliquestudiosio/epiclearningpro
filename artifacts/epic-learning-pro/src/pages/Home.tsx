@@ -342,8 +342,10 @@ export default function Home() {
                   <div className="h-11 w-11 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-4">
                     <pain.icon size={22} />
                   </div>
-                  <h3 className="font-semibold text-xl mb-2 text-foreground">{pain.title}</h3>
-                  <p className="text-muted-foreground text-base leading-relaxed">{pain.desc}</p>
+                  <h3 className="font-semibold text-xl mb-2 text-foreground"
+                  data-editable="" data-key={`agitate.card-${i}-title`}>{pain.title}</h3>
+                  <p className="text-muted-foreground text-base leading-relaxed"
+                    data-editable="" data-key={`agitate.card-${i}-desc`}>{pain.desc}</p>
                 </div>
               </FadeIn>
             ))}
@@ -360,9 +362,12 @@ export default function Home() {
       <section id="services" className="py-16 md:py-28">
         <div className="container mx-auto px-4 sm:px-6">
           <FadeIn className="text-center max-w-3xl mx-auto mb-12 md:mb-20">
-            <h2 className="text-sm font-bold tracking-wider text-primary uppercase mb-3">Our Services</h2>
-            <h3 className="text-3xl sm:text-4xl md:text-5xl font-serif font-semibold mb-5">Expertise that drives results.</h3>
-            <p className="text-lg md:text-xl text-muted-foreground">From corporate training programs to individual coaching and professional editing, we tailor our approach to your specific goals.</p>
+            <h2 className="text-sm font-bold tracking-wider text-primary uppercase mb-3"
+              data-editable="" data-key="services.label">Our Services</h2>
+            <h3 className="text-3xl sm:text-4xl md:text-5xl font-serif font-semibold mb-5"
+              data-editable="" data-key="services.heading">Expertise that drives results.</h3>
+            <p className="text-lg md:text-xl text-muted-foreground"
+              data-editable="" data-key="services.subtext">From corporate training programs to individual coaching and professional editing, we tailor our approach to your specific goals.</p>
           </FadeIn>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8"
@@ -374,22 +379,22 @@ export default function Home() {
                   <div className="h-13 w-13 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition-all duration-300 text-primary p-2.5">
                     <Users size={26} />
                   </div>
-                  <CardTitle className="text-xl sm:text-2xl font-serif">Consulting & Coaching</CardTitle>
-                  <CardDescription className="text-base pt-1">For Businesses & Individuals</CardDescription>
+                  <CardTitle className="text-xl sm:text-2xl font-serif" data-editable="" data-key="services.card-0-title">Consulting & Coaching</CardTitle>
+                  <CardDescription className="text-base pt-1" data-editable="" data-key="services.card-0-subtitle">For Businesses & Individuals</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-grow">
-                  <p className="text-muted-foreground mb-5 text-base leading-relaxed">If your business values progress and proactivity, you need a strong training program. We create exciting educational plans unique to your team's needs. Well-trained, happy people perform better!</p>
-                  <h4 className="font-semibold text-sm uppercase tracking-wide text-foreground mb-3">Specialties</h4>
+                  <p className="text-muted-foreground mb-5 text-base leading-relaxed" data-editable="" data-key="services.card-0-desc">If your business values progress and proactivity, you need a strong training program. We create exciting educational plans unique to your team's needs. Well-trained, happy people perform better!</p>
+                  <h4 className="font-semibold text-sm uppercase tracking-wide text-foreground mb-3" data-editable="" data-key="services.card-0-section">Specialties</h4>
                   <ul className="space-y-2">
                     {["Business Training Programs", "Leadership & HR Coaching", "GED Coaching", "Homeschooling & Special Needs"].map((item, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <CheckCircle2 className="h-4 w-4 text-secondary mt-0.5 shrink-0" /><span>{item}</span>
+                        <CheckCircle2 className="h-4 w-4 text-secondary mt-0.5 shrink-0" /><span data-editable="" data-key={`services.card-0-bullet-${i}`}>{item}</span>
                       </li>
                     ))}
                   </ul>
                 </CardContent>
                 <CardFooter className="pt-0 pb-6 border-t border-border/50 mt-auto bg-muted/20">
-                  <div className="pt-4 w-full text-sm text-muted-foreground italic">Negotiated hourly/weekly/monthly. Coaching bundles available.</div>
+                  <div className="pt-4 w-full text-sm text-muted-foreground italic" data-editable="" data-key="services.card-0-note">Negotiated hourly/weekly/monthly. Coaching bundles available.</div>
                 </CardFooter>
               </Card>
             </FadeIn>
@@ -401,22 +406,22 @@ export default function Home() {
                   <div className="h-13 w-13 rounded-2xl bg-secondary/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-secondary group-hover:text-white transition-all duration-300 text-secondary p-2.5">
                     <Award size={26} />
                   </div>
-                  <CardTitle className="text-xl sm:text-2xl font-serif">Professional Seminars</CardTitle>
-                  <CardDescription className="text-base pt-1">Transform Your Team</CardDescription>
+                  <CardTitle className="text-xl sm:text-2xl font-serif" data-editable="" data-key="services.card-1-title">Professional Seminars</CardTitle>
+                  <CardDescription className="text-base pt-1" data-editable="" data-key="services.card-1-subtitle">Transform Your Team</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-grow relative z-10">
-                  <p className="text-muted-foreground mb-5 text-base leading-relaxed">Improve communication skills, gain expert knowledge, and expand focus with actionable seminars. Topics are matched to your training goals and team's specific interests.</p>
-                  <h4 className="font-semibold text-sm uppercase tracking-wide text-foreground mb-3">Popular Topics</h4>
+                  <p className="text-muted-foreground mb-5 text-base leading-relaxed" data-editable="" data-key="services.card-1-desc">Improve communication skills, gain expert knowledge, and expand focus with actionable seminars. Topics are matched to your training goals and team's specific interests.</p>
+                  <h4 className="font-semibold text-sm uppercase tracking-wide text-foreground mb-3" data-editable="" data-key="services.card-1-section">Popular Topics</h4>
                   <ul className="space-y-2">
                     {["Intuitive Leadership Series", "Confident Communication", "Mental Health for Professionals", "Workflow & Organization"].map((item, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" /><span>{item}</span>
+                        <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" /><span data-editable="" data-key={`services.card-1-bullet-${i}`}>{item}</span>
                       </li>
                     ))}
                   </ul>
                 </CardContent>
                 <CardFooter className="pt-0 pb-6 border-t border-border/50 mt-auto bg-muted/20 relative z-10">
-                  <div className="pt-4 w-full text-sm text-muted-foreground italic">Offered as 1-3 day formats or 5 half-day sessions.</div>
+                  <div className="pt-4 w-full text-sm text-muted-foreground italic" data-editable="" data-key="services.card-1-note">Offered as 1-3 day formats or 5 half-day sessions.</div>
                 </CardFooter>
               </Card>
             </FadeIn>
@@ -428,22 +433,22 @@ export default function Home() {
                   <div className="h-13 w-13 rounded-2xl bg-accent/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-accent group-hover:text-white transition-all duration-300 text-accent p-2.5">
                     <FileEdit size={26} />
                   </div>
-                  <CardTitle className="text-xl sm:text-2xl font-serif">Proofreading & Editing</CardTitle>
-                  <CardDescription className="text-base pt-1">Polish Your Presence</CardDescription>
+                  <CardTitle className="text-xl sm:text-2xl font-serif" data-editable="" data-key="services.card-2-title">Proofreading & Editing</CardTitle>
+                  <CardDescription className="text-base pt-1" data-editable="" data-key="services.card-2-subtitle">Polish Your Presence</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-grow">
-                  <p className="text-muted-foreground mb-5 text-base leading-relaxed">Ensure your company's written communication is flawless. Any professional document will be edited to perfection—accuracy of grammar, punctuation, usage, and context.</p>
-                  <h4 className="font-semibold text-sm uppercase tracking-wide text-foreground mb-3">Documents Covered</h4>
+                  <p className="text-muted-foreground mb-5 text-base leading-relaxed" data-editable="" data-key="services.card-2-desc">Ensure your company's written communication is flawless. Any professional document will be edited to perfection—accuracy of grammar, punctuation, usage, and context.</p>
+                  <h4 className="font-semibold text-sm uppercase tracking-wide text-foreground mb-3" data-editable="" data-key="services.card-2-section">Documents Covered</h4>
                   <ul className="space-y-2">
                     {["Blogs, Newsletters & Emails", "Proposals & Contracts", "Professional Posts", "Essays & Articles"].map((item, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <CheckCircle2 className="h-4 w-4 text-accent mt-0.5 shrink-0" /><span>{item}</span>
+                        <CheckCircle2 className="h-4 w-4 text-accent mt-0.5 shrink-0" /><span data-editable="" data-key={`services.card-2-bullet-${i}`}>{item}</span>
                       </li>
                     ))}
                   </ul>
                 </CardContent>
                 <CardFooter className="pt-0 pb-6 border-t border-border/50 mt-auto bg-muted/20">
-                  <div className="pt-4 w-full text-sm text-muted-foreground italic">Pricing by word count or by project.</div>
+                  <div className="pt-4 w-full text-sm text-muted-foreground italic" data-editable="" data-key="services.card-2-note">Pricing by word count or by project.</div>
                 </CardFooter>
               </Card>
             </FadeIn>
@@ -463,8 +468,10 @@ export default function Home() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-10 md:mb-14 gap-6">
             <FadeIn className="max-w-2xl">
-              <h2 className="text-3xl md:text-5xl font-serif font-semibold mb-3 text-white">Trusted by professionals.</h2>
-              <p className="text-lg md:text-xl text-white/70">Real words from real clients about working with Epic Learning Pro.</p>
+              <h2 className="text-3xl md:text-5xl font-serif font-semibold mb-3 text-white"
+                data-editable="" data-key="testimonials.heading">Trusted by professionals.</h2>
+              <p className="text-lg md:text-xl text-white/70"
+                data-editable="" data-key="testimonials.subtext">Real words from real clients about working with Epic Learning Pro.</p>
             </FadeIn>
             <FadeIn delay={0.2} direction="left">
               <div className="flex items-center gap-4 bg-white/15 backdrop-blur-sm px-6 py-4 rounded-2xl border border-white/25 shrink-0">
@@ -605,8 +612,10 @@ export default function Home() {
 
         <div className="container mx-auto px-4 sm:px-6 max-w-3xl relative z-10">
           <FadeIn className="text-center mb-10 md:mb-14">
-            <h2 className="text-3xl md:text-5xl font-serif font-semibold mb-4 text-foreground">Common Questions</h2>
-            <p className="text-lg md:text-xl text-muted-foreground">Everything you need to know about working with us.</p>
+            <h2 className="text-3xl md:text-5xl font-serif font-semibold mb-4 text-foreground"
+              data-editable="" data-key="faq.heading">Common Questions</h2>
+            <p className="text-lg md:text-xl text-muted-foreground"
+              data-editable="" data-key="faq.subtext">Everything you need to know about working with us.</p>
           </FadeIn>
 
           <FadeIn delay={0.2}>
@@ -625,10 +634,10 @@ export default function Home() {
               ].map((item, i) => (
                 <AccordionItem key={i} value={`item-${i}`} className="bg-white/80 backdrop-blur-sm border border-primary/10 rounded-xl px-5 py-1 shadow-sm">
                   <AccordionTrigger className="text-lg sm:text-xl font-medium hover:no-underline text-foreground hover:text-primary transition-colors text-left py-4 [&>svg]:text-muted-foreground">
-                    {item.q}
+                    <span data-editable="" data-key={`faq.item-${i}-q`}>{item.q}</span>
                   </AccordionTrigger>
                   <AccordionContent className="text-muted-foreground text-base sm:text-lg pt-1 pb-4 leading-relaxed">
-                    {item.a}
+                    <span data-editable="" data-key={`faq.item-${i}-a`}>{item.a}</span>
                   </AccordionContent>
                 </AccordionItem>
               ))}
@@ -648,8 +657,10 @@ export default function Home() {
         <div className="container mx-auto px-4 sm:px-6 relative z-10">
           <div className="max-w-5xl mx-auto">
             <FadeIn className="text-center mb-10 md:mb-14">
-              <h2 className="text-3xl sm:text-4xl md:text-5xl font-serif font-semibold text-white mb-4">Let's work together.</h2>
-              <p className="text-xl sm:text-2xl text-white/85 max-w-xl mx-auto font-light leading-relaxed">
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-serif font-semibold text-white mb-4"
+                data-editable="" data-key="contact.heading">Let's work together.</h2>
+              <p className="text-xl sm:text-2xl text-white/85 max-w-xl mx-auto font-light leading-relaxed"
+                data-editable="" data-key="contact.subtext">
                 Ready to transform your team or take the next step in your personal journey? We'd love to hear from you.
               </p>
             </FadeIn>
@@ -777,9 +788,10 @@ export default function Home() {
             </div>
           </div>
           <div className="border-t border-primary/15 pt-7 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
-            <p>Copyright 2026 © Epic Learning Pro. All rights reserved.</p>
+            <p data-editable="" data-key="footer.copyright">Copyright 2026 © Epic Learning Pro. All rights reserved.</p>
             <p>Website Design by{' '}
               <a href="https://cliquestudios.io" target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/70 transition-colors">Clique Studios IO</a>
+              <span id="ap-gear-anchor"></span>
             </p>
           </div>
         </div>
