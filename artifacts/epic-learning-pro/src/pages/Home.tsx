@@ -228,7 +228,8 @@ export default function Home() {
       <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${isScrolled ? "bg-white/90 backdrop-blur-md shadow-sm border-b border-border/50 py-3" : "bg-transparent py-5"}`}>
         <div className="container mx-auto px-4 sm:px-6 flex items-center justify-between">
           <button onClick={() => scrollTo('hero')} className="flex items-center gap-2 group outline-none" data-testid="link-logo-home">
-            <img src={logoPath} alt="Epic Learning Pro Logo" className="h-10 w-10 sm:h-12 sm:w-12 rounded-full shadow-sm transition-transform duration-300 group-hover:scale-105" />
+            <img src={logoPath} alt="Epic Learning Pro Logo" className="h-10 w-10 sm:h-12 sm:w-12 rounded-full shadow-sm transition-transform duration-300 group-hover:scale-105"
+              data-editable-image="" data-key="logo" />
             <span className={`font-serif font-semibold text-base sm:text-xl tracking-tight transition-colors hidden sm:block ${isScrolled ? "text-foreground hover:text-primary" : "text-white/90 hover:text-white"}`}>
               Epic Learning Pro
             </span>
@@ -287,18 +288,21 @@ export default function Home() {
           <div className="max-w-4xl mx-auto text-center">
             <FadeIn delay={0.05}>
               <p className="text-2xl sm:text-3xl md:text-4xl font-serif italic mb-4 tracking-wide"
-                style={{ color: '#F0C84A', textShadow: '0 2px 16px rgba(202,167,71,0.45)' }}>
+                style={{ color: '#F0C84A', textShadow: '0 2px 16px rgba(202,167,71,0.45)' }}
+                data-editable="" data-key="home.hero-tagline">
                 Imagine. Believe. Achieve.
               </p>
             </FadeIn>
             <FadeIn delay={0.1}>
-              <h1 className="text-5xl sm:text-6xl md:text-8xl font-serif font-semibold tracking-tight text-white mb-6 leading-tight">
+              <h1 className="text-5xl sm:text-6xl md:text-8xl font-serif font-semibold tracking-tight text-white mb-6 leading-tight"
+                data-editable="" data-key="home.hero-title">
                 Professional Training{" "}
                 <span className="text-white/80">&amp; Services</span>
               </h1>
             </FadeIn>
             <FadeIn delay={0.2}>
-              <p className="text-xl sm:text-2xl md:text-3xl text-white/80 mb-10 max-w-3xl mx-auto leading-relaxed">
+              <p className="text-xl sm:text-2xl md:text-3xl text-white/80 mb-10 max-w-3xl mx-auto leading-relaxed"
+                data-editable="" data-key="home.hero-subtitle">
                 With over 30 years of experience, we help individuals and teams transform their potential into tangible results.
               </p>
             </FadeIn>
@@ -324,8 +328,10 @@ export default function Home() {
         <div className="container mx-auto px-4 sm:px-6">
           <FadeIn>
             <div className="text-center max-w-3xl mx-auto mb-12 md:mb-16">
-              <h2 className="text-3xl md:text-5xl font-serif font-semibold mb-4 text-foreground">Feeling stuck or overwhelmed?</h2>
-              <p className="text-lg md:text-xl text-muted-foreground">You are not alone. Whether you're an individual facing a hurdle or a team struggling to connect, the path forward isn't always clear.</p>
+              <h2 className="text-3xl md:text-5xl font-serif font-semibold mb-4 text-foreground"
+                data-editable="" data-key="agitate.heading">Feeling stuck or overwhelmed?</h2>
+              <p className="text-lg md:text-xl text-muted-foreground"
+                data-editable="" data-key="agitate.subtext">You are not alone. Whether you're an individual facing a hurdle or a team struggling to connect, the path forward isn't always clear.</p>
             </div>
           </FadeIn>
 
@@ -344,7 +350,8 @@ export default function Home() {
           </div>
 
           <FadeIn delay={0.5} className="mt-14 text-center">
-            <p className="text-2xl font-medium text-foreground font-serif italic">We see you. We understand. And we know exactly how to help.</p>
+            <p className="text-2xl font-medium text-foreground font-serif italic"
+              data-editable="" data-key="agitate.closing">We see you. We understand. And we know exactly how to help.</p>
           </FadeIn>
         </div>
       </section>
@@ -358,7 +365,8 @@ export default function Home() {
             <p className="text-lg md:text-xl text-muted-foreground">From corporate training programs to individual coaching and professional editing, we tailor our approach to your specific goals.</p>
           </FadeIn>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8"
+            data-editable-list="services" data-key="services.items">
             <FadeIn delay={0.1} className="flex h-full">
               <Card className="flex flex-col h-full border-border/60 shadow-md hover:shadow-xl hover:border-primary/30 transition-all duration-500 overflow-hidden group w-full">
                 <div className="h-1.5 w-full bg-gradient-to-r from-primary to-primary/50" />
@@ -534,22 +542,27 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center mb-16 md:mb-24">
             <FadeIn direction="right">
               <h2 className="text-sm font-bold tracking-wider text-primary uppercase mb-3">About Us</h2>
-              <h3 className="text-3xl sm:text-4xl md:text-5xl font-serif font-semibold mb-5">Imagine. Believe. Achieve.</h3>
-              <p className="text-xl font-medium text-foreground mb-5 border-l-4 border-accent pl-4">
+              <h3 className="text-3xl sm:text-4xl md:text-5xl font-serif font-semibold mb-5"
+                data-editable="" data-key="about.heading">Imagine. Believe. Achieve.</h3>
+              <p className="text-xl font-medium text-foreground mb-5 border-l-4 border-accent pl-4"
+                data-editable="" data-key="about.slogan">
                 Epic Learning Pro is all about making good lives great!
               </p>
-              <p className="text-lg md:text-xl text-muted-foreground mb-8 leading-relaxed">
+              <p className="text-lg md:text-xl text-muted-foreground mb-8 leading-relaxed"
+                data-editable="" data-key="about.description">
                 Our certified educators have over 30 years of experience in enlightening minds, providing accurate information, and transforming dreams into reality. Whatever you can imagine, we'll help you achieve!
               </p>
               <div className="bg-white/70 backdrop-blur-sm border border-primary/15 p-6 rounded-2xl shadow-sm relative">
                 <div className="absolute top-4 left-4 text-5xl leading-none text-primary/15 font-serif select-none">"</div>
-                <p className="text-lg font-serif italic text-foreground relative z-10 text-center px-4">Whatever the mind can think and perceive, it can achieve.</p>
+                <p className="text-lg font-serif italic text-foreground relative z-10 text-center px-4"
+                  data-editable="" data-key="about.quote">Whatever the mind can think and perceive, it can achieve.</p>
                 <p className="text-sm text-muted-foreground text-center mt-3">— Napoleon Hill</p>
               </div>
             </FadeIn>
 
             <FadeIn delay={0.2} direction="left" className="order-first lg:order-last">
-              <img src={logoPath} alt="Epic Learning Pro" className="w-full max-w-xs sm:max-w-sm mx-auto rounded-full shadow-2xl bg-white p-4" />
+              <img src={logoPath} alt="Epic Learning Pro" className="w-full max-w-xs sm:max-w-sm mx-auto rounded-full shadow-2xl bg-white p-4"
+                data-editable-image="" data-key="about.logo" />
             </FadeIn>
           </div>
 
@@ -557,7 +570,8 @@ export default function Home() {
             <h3 className="text-2xl sm:text-3xl font-serif font-semibold mb-10 md:mb-14 text-center">Meet the Team</h3>
           </FadeIn>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-4xl mx-auto"
+            data-editable-list="team" data-key="team.members">
             {[
               { name: "Olivia D Barlow",  title: "Owner & Educator",                   suffix: "BS, MEd", img: oliviaPath  },
               { name: "Octavia Barlow",   title: "Scheduling & Operations Coordinator", suffix: "",        img: octaviaPath },
