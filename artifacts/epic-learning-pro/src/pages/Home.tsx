@@ -235,9 +235,10 @@ export default function Home() {
             </span>
           </button>
 
-          <nav className="hidden md:flex items-center gap-6 lg:gap-8">
-            {navLinks.map(link => (
+          <nav className="hidden md:flex items-center gap-6 lg:gap-8" data-editable-nav="">
+            {navLinks.map((link, i) => (
               <button key={link.name} onClick={() => scrollTo(link.id)} data-testid={`link-nav-${link.id}`}
+                data-key={`nav.link-${i}`}
                 className={`text-base font-medium transition-colors outline-none ${isScrolled ? "text-muted-foreground hover:text-primary" : "text-white/80 hover:text-white"}`}>
                 {link.name}
               </button>
@@ -335,7 +336,8 @@ export default function Home() {
             </div>
           </FadeIn>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 max-w-6xl mx-auto"
+            data-editable-list="agitate" data-key="agitate.items">
             {painPoints.map((pain, i) => (
               <FadeIn key={i} delay={0.07 * i} direction="up">
                 <div className="bg-white rounded-2xl p-6 h-full transition-all duration-300 hover:-translate-y-1 border border-primary/10 shadow-sm">
@@ -485,6 +487,7 @@ export default function Home() {
           <FadeIn delay={0.1}>
             <div
               className="overflow-hidden cursor-grab active:cursor-grabbing"
+              data-editable-list="testimonials" data-key="testimonials.items"
               style={{
                 maskImage: 'linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)',
                 WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)',
@@ -516,7 +519,8 @@ export default function Home() {
                       {/* Quote */}
                       <div className="flex-grow mb-6 relative">
                         <Quote size={28} className="text-primary/15 absolute -top-1 -left-1 pointer-events-none" />
-                        <p className="text-foreground text-base font-serif italic leading-relaxed pl-5">
+                        <p className="text-foreground text-base font-serif italic leading-relaxed pl-5"
+                          {...(i < testimonials.length ? {'data-key': `testimonials.item-${i}-text`} : {})}>
                           {t.text}
                         </p>
                       </div>
@@ -528,7 +532,8 @@ export default function Home() {
                           {t.name.charAt(0)}
                         </div>
                         <div>
-                          <p className="font-semibold text-foreground text-sm leading-tight">{t.name}</p>
+                          <p className="font-semibold text-foreground text-sm leading-tight"
+                            {...(i < testimonials.length ? {'data-key': `testimonials.item-${i}-name`} : {})}>{t.name}</p>
                           <p className="text-xs text-muted-foreground">Verified Client Review</p>
                         </div>
                       </div>
@@ -592,11 +597,11 @@ export default function Home() {
                       className="w-40 h-40 sm:w-48 sm:h-48 md:w-60 md:h-60 lg:w-64 lg:h-64 object-cover object-center rounded-full shadow-md border-4 border-white relative z-10"
                       data-testid={`img-team-${member.name.split(' ')[0].toLowerCase()}`} />
                   </div>
-                  <h4 className="text-lg sm:text-xl font-serif font-semibold">
+                  <h4 className="text-lg sm:text-xl font-serif font-semibold" data-key={`team.member-${i}-name`}>
                     {member.name}
                     {member.suffix && <span className="text-sm font-sans text-muted-foreground font-normal">, {member.suffix}</span>}
                   </h4>
-                  <p className="text-primary font-medium mt-1 text-sm sm:text-base">{member.title}</p>
+                  <p className="text-primary font-medium mt-1 text-sm sm:text-base" data-key={`team.member-${i}-title`}>{member.title}</p>
                 </div>
               </FadeIn>
             ))}
@@ -711,7 +716,7 @@ export default function Home() {
                         </div>
                         <div>
                           <label className="block text-white text-sm font-medium mb-1.5" htmlFor="phone">
-                            <span className="inline-flex items-center gap-1"><Phone size={13} /> Phone <span className="text-white/50 font-normal">(optional)</span></span>
+                            <span className="inline-flex items-center gap-1"><Phone size={13} /> Phone</span>
                           </label>
                           <input id="phone" name="phone" type="tel" autoComplete="tel" placeholder="(555) 000-0000"
                             value={form.phone} onChange={handleChange} data-testid="input-contact-phone" className={inputBase} />
@@ -757,12 +762,14 @@ export default function Home() {
             </FadeIn>
 
             <FadeIn delay={0.3} className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
-              <button onClick={copyEmail} className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors">
+              <button onClick={copyEmail} data-editable-contact="" data-key="contact.email"
+                className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors">
                 {copiedEmail ? <CheckCircle2 size={16} /> : <Mail size={16} />}
                 {copiedEmail ? 'Copied!' : 'contact@epiclearningpro.com'}
               </button>
               <span className="hidden sm:block text-white/30">·</span>
               <a href="https://www.alignable.com/paulden-az/epic-learning-pro" target="_blank" rel="noopener noreferrer"
+                data-editable-contact="" data-key="contact.alignable"
                 className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors">
                 Connect on Alignable
               </a>

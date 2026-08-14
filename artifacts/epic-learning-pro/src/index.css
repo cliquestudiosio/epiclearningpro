@@ -78,6 +78,14 @@ img {
 
 /* LIGHT MODE */
 :root {
+  /* ── Brand color palette (hex) — read + written by the Admin Portal color swatches ── */
+  --brand-primary:    #8B5FE6;
+  --brand-secondary:  #36A6DD;
+  --brand-accent:     #CAA747;
+  --brand-hero-start: #5B2DA8;
+  --brand-hero-end:   #A472F0;
+  --brand-tint:       #7a52d4;
+
   --button-outline: rgba(0, 0, 0, 0.1);
   --badge-outline: rgba(0, 0, 0, 0.05);
 
