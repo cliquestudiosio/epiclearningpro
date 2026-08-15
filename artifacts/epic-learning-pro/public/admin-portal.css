@@ -372,6 +372,33 @@ select.ap-inp option { color: #111; background: #fff; }
 .ap-sec-gradient-wrap,
 .ap-sec-solid-wrap { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
 
+/* ─── BACKGROUNDS PANEL (replaces #ap-section-bg-modal) ─────────── */
+#ap-bg-panel {
+  position: fixed; right: 350px; top: 80px; z-index: 99999;
+  width: 300px; max-height: 82vh;
+  background: #0f0f1a; border-radius: 14px; overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06);
+  font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #e2e8f0;
+  display: flex; flex-direction: column;
+}
+#ap-bg-panel-body { overflow-y: auto; flex: 1; padding-bottom: 4px; }
+#ap-bg-panel-body::-webkit-scrollbar { width: 4px; }
+#ap-bg-panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 2px; }
+/* Accordion items inside backgrounds panel */
+#ap-bg-panel .ap-bg-acc { border-bottom: 1px solid rgba(255,255,255,.05); }
+#ap-bg-panel .ap-acc-body { gap: 5px; }
+#ap-bg-panel .ap-sec-solid-wrap,
+#ap-bg-panel .ap-sec-gradient-wrap,
+#ap-bg-panel .ap-sec-image-wrap { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
+
+/* ─── LOGO EDITOR POPOVER ───────────────────────────────────────── */
+#ap-logo-editor {
+  /* inline style sets position/size/bg — this handles interior layout */
+  display: flex; flex-direction: column; gap: 0;
+}
+#ap-logo-editor .ap-lbl { color: #94a3b8; font-size: 11px; margin-bottom: 3px; display: block; }
+#ap-logo-editor .ap-inp { width: 100%; box-sizing: border-box; }
+
 /* ─── PROMO MODAL ───────────────────────────────────────────────── */
 #ap-promo-modal {
   position: fixed; right: 350px; top: 80px; z-index: 99999;

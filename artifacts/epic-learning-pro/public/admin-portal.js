@@ -24,6 +24,7 @@
   var PROMO_KEY   = 'ap-promo-'     + SITE_ID;
   var IMG_KEY     = 'ap-img-'       + SITE_ID + '-';
   var SECTION_BG_KEY = 'ap-section-bg-' + SITE_ID;
+  var HEX_COLOR_KEY  = 'ap-hexcolors-'  + SITE_ID;
   var PIN         = '8421';
   var DELAY       = 420;
 
@@ -71,6 +72,145 @@
   }
 
   function escH(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  /* ── Color utilities ─────────────────────────────────────── */
+  function normalizeHex(hex){
+    if(!hex) return '';
+    hex=String(hex).trim().toLowerCase();
+    if(hex.length===4&&hex[0]==='#') hex='#'+hex[1]+hex[1]+hex[2]+hex[2]+hex[3]+hex[3];
+    return hex;
+  }
+  function rgbToHex(r,g,b){
+    return '#'+((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);
+  }
+  function escapeRegex(str){ return str.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+
+  function extractColorHexes(str){
+    if(!str||str==='none') return [];
+    var hexes=[]; var seen={};
+    function add(h){ var n=normalizeHex(h); if(n.length===7&&!seen[n]){seen[n]=true;hexes.push(n);} }
+    (str.match(/#[0-9a-fA-F]{6}(?![0-9a-fA-F])/g)||[]).forEach(add);
+    (str.match(/#[0-9a-fA-F]{3}(?![0-9a-fA-F])/g)||[]).forEach(add);
+    (str.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)[^)]*\)/g)||[]).forEach(function(rgb){
+      var m=rgb.match(/(\d+)/g); if(m&&m.length>=3) add(rgbToHex(+m[0],+m[1],+m[2]));
+    });
+    return hexes;
+  }
+
+  /* Skip noisy near-white/near-black/grey UI tones */
+  var SKIP_HEX={
+    '#000000':1,'#ffffff':1,'#111111':1,'#1e293b':1,'#0f172a':1,
+    '#334155':1,'#475569':1,'#64748b':1,'#94a3b8':1,'#cbd5e1':1,
+    '#e2e8f0':1,'#f1f5f9':1,'#f8fafc':1,'#f5f5f5':1,'#eeeeee':1,
+  };
+
+  /* Guide §4: scan ALL distinct site hexes, frequency-ordered */
+  function getSiteColors(){
+    var count={};
+    function add(hex,w){
+      hex=normalizeHex(hex);
+      if(!hex||hex.length!==7) return;
+      if(SKIP_HEX[hex]) return;
+      count[hex]=(count[hex]||0)+w;
+    }
+    function scanStr(str,w){ extractColorHexes(str||'').forEach(function(h){add(h,w);}); }
+    /* High-weight: section/header/footer inline styles */
+    document.querySelectorAll('section[id],header,footer').forEach(function(el){ scanStr(el.getAttribute('style'),10); });
+    /* Medium-weight: all other inline styles */
+    document.querySelectorAll('[style]').forEach(function(el){ scanStr(el.getAttribute('style'),3); });
+    /* :root inline (user overrides) */
+    scanStr(document.documentElement.getAttribute('style'),5);
+    /* Low-weight: stylesheet rules (capped for perf) */
+    try{
+      Array.from(document.styleSheets).forEach(function(sheet){
+        try{ Array.from(sheet.cssRules||[]).slice(0,400).forEach(function(r){ if(r.cssText) scanStr(r.cssText,1); }); }catch(e){}
+      });
+    }catch(e){}
+    return Object.keys(count).sort(function(a,b){return count[b]-count[a];}).slice(0,12);
+  }
+
+  /* Guide §4: rewrite every occurrence of oldHex to newHex across inline styles */
+  function updateAllHexUses(oldHex,newHex){
+    oldHex=normalizeHex(oldHex); newHex=normalizeHex(newHex);
+    if(!oldHex||!newHex||oldHex===newHex) return;
+    var re=new RegExp('('+escapeRegex(oldHex.toLowerCase())+'|'+escapeRegex(oldHex.toUpperCase())+')(?![0-9a-fA-F])','g');
+    function replace(str){ return str?str.replace(re,newHex.toLowerCase()):str; }
+    /* :root */
+    var ri=document.documentElement.getAttribute('style')||'';
+    var rn=replace(ri); if(rn!==ri) document.documentElement.setAttribute('style',rn);
+    /* BRAND_COLORS css vars */
+    var root=document.documentElement;
+    BRAND_COLORS.forEach(function(bc){
+      var cur=root.style.getPropertyValue(bc.varName).trim();
+      if(normalizeHex(cur)===oldHex){ root.style.setProperty(bc.varName,newHex); if(bc.hslVar) root.style.setProperty(bc.hslVar,hexToHSL(newHex)); }
+    });
+    /* All inline styles */
+    document.querySelectorAll('[style]').forEach(function(el){
+      if(el===document.documentElement) return;
+      var s=el.getAttribute('style')||''; var ns=replace(s); if(ns!==s) el.setAttribute('style',ns);
+    });
+  }
+
+  /* ── Background detection helpers ───────────────────────── */
+  function detectCurrentBgFromEl(el){
+    var inlineStyle=el.getAttribute('style')||'';
+    /* Match `background:` (shorthand) in inline style */
+    var bgMatch=inlineStyle.match(/background\s*:\s*([^;]+)/i);
+    var bgVal=bgMatch?bgMatch[1].trim():'';
+    if(!bgVal){
+      /* Fall back to computed */
+      var comp=window.getComputedStyle(el);
+      bgVal=comp.backgroundImage&&comp.backgroundImage!=='none'?comp.backgroundImage:comp.backgroundColor;
+    }
+    if(!bgVal||bgVal==='transparent'||bgVal==='rgba(0, 0, 0, 0)'){
+      return {type:'solid',solid:'#ffffff'};
+    }
+    if(bgVal.indexOf('linear-gradient')!==-1||bgVal.indexOf('radial-gradient')!==-1){
+      return parseGradientStr(bgVal);
+    }
+    if(bgVal.indexOf('url(')!==-1){
+      var um=bgVal.match(/url\(['"]?([^'")\s]+)['"]?\)/);
+      return {type:'image',imageSrc:um?um[1]:''};
+    }
+    return {type:'solid',solid:rgbStringToHex(bgVal)||bgVal};
+  }
+
+  function splitGradientParts(str){
+    var parts=[]; var depth=0; var cur='';
+    for(var i=0;i<str.length;i++){
+      var c=str[i];
+      if(c==='(') depth++;
+      else if(c===')') depth--;
+      else if(c===','&&depth===0){parts.push(cur.trim());cur='';continue;}
+      cur+=c;
+    }
+    if(cur.trim()) parts.push(cur.trim());
+    return parts;
+  }
+
+  function parseGradientStr(str){
+    var match=str.match(/linear-gradient\((.+)\)/s)||str.match(/linear-gradient\(([^)]+(?:\([^)]*\)[^)]*)*)\)/);
+    if(!match) return {type:'gradient',start:'#5B2DA8',end:'#A472F0',angle:135};
+    var parts=splitGradientParts(match[1]);
+    var angle=135; var colors=[];
+    parts.forEach(function(p){
+      p=p.trim();
+      if(/^-?\d+deg$/.test(p)){angle=parseInt(p);return;}
+      if(/^to\s/.test(p)) return;
+      var hex=p.match(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/);
+      if(hex){colors.push(normalizeHex(hex[0]));return;}
+      var rgb=p.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+      if(rgb) colors.push(rgbToHex(+rgb[1],+rgb[2],+rgb[3]));
+    });
+    return{type:'gradient',angle:angle,start:colors[0]||'#5B2DA8',end:colors[colors.length-1]||'#A472F0'};
+  }
+
+  function rgbStringToHex(str){
+    var m=str.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if(m) return rgbToHex(+m[1],+m[2],+m[3]);
+    if(/^#[0-9a-fA-F]{3,6}$/.test(str.trim())) return normalizeHex(str.trim());
+    return null;
+  }
 
   function toast(msg){
     var old=document.getElementById('ap-toast'); if(old) old.remove();
@@ -194,11 +334,18 @@
   function applyColors(colors){
     if(!colors) return;
     var root=document.documentElement;
-    BRAND_COLORS.forEach(function(bc){
-      var hex=colors[bc.varName]; if(!hex) return;
-      root.style.setProperty(bc.varName,hex);
-      if(bc.hslVar) root.style.setProperty(bc.hslVar,hexToHSL(hex));
-    });
+    /* Handle old format { '--brand-primary': '#hex' } and new { '#oldHex': '#newHex' } */
+    var isOldFormat=Object.keys(colors).some(function(k){return k.startsWith('--');});
+    if(isOldFormat){
+      BRAND_COLORS.forEach(function(bc){
+        var hex=colors[bc.varName]; if(!hex) return;
+        root.style.setProperty(bc.varName,hex);
+        if(bc.hslVar) root.style.setProperty(bc.hslVar,hexToHSL(hex));
+      });
+    } else {
+      /* New hex-to-hex format: apply after a short delay so React inline styles exist */
+      Object.keys(colors).forEach(function(oldHex){ updateAllHexUses(oldHex,colors[oldHex]); });
+    }
   }
 
   function applyImages(){
@@ -305,6 +452,10 @@
 
     var savedColors=readJSON(COLOR_KEY);
     if(savedColors) applyColors(savedColors);
+
+    /* New hex-to-hex color remappings */
+    var savedHexColors=readJSON(HEX_COLOR_KEY);
+    if(savedHexColors) setTimeout(function(){ applyColors(savedHexColors); },80);
 
     var savedBgs=readJSON(SECTION_BG_KEY);
     if(savedBgs) applySectionBgs(savedBgs);
@@ -438,7 +589,7 @@
     document.querySelectorAll('[data-key^="hero.cta-"]').forEach(function(el){ el.removeEventListener('click',handleHeroCtaClick,true); });
 
     var hdr=document.querySelector('header'); if(hdr) hdr.style.top='';
-    ['ap-toolbar','ap-panel','ap-preview-bar','ap-toast','ap-colors-modal','ap-promo-modal','ap-section-bg-modal'].forEach(function(id){
+    ['ap-toolbar','ap-panel','ap-preview-bar','ap-toast','ap-colors-modal','ap-promo-modal','ap-section-bg-modal','ap-bg-panel','ap-logo-editor'].forEach(function(id){
       var el=document.getElementById(id); if(el) el.remove();
     });
     S.activeEl=null; S.panelOpen=false;
@@ -453,7 +604,7 @@
   function handleClickOutside(e){
     if(!S.editMode||!S.activeEl) return;
     if(S.activeEl.contains(e.target)||S.activeEl===e.target) return;
-    if(e.target.closest('#ap-toolbar,#ap-panel,#ap-colors-modal,#ap-promo-modal,#ap-section-bg-modal')) return;
+    if(e.target.closest('#ap-toolbar,#ap-panel,#ap-colors-modal,#ap-promo-modal,#ap-section-bg-modal,#ap-bg-panel,#ap-logo-editor')) return;
     commitActive();
   }
 
@@ -490,26 +641,65 @@
     openPanel('nav');
   }
 
-  /* guide §4: logo WRAPPER button — intercept in capture so React onClick does not scroll/navigate */
+  /* guide §3: logo WRAPPER button — intercept capture phase → open logo editor panel */
   function handleLogoWrapperClick(e){
     if(S.previewMode) return;
     var imgEl=e.currentTarget.querySelector('[data-editable-image]');
     if(!imgEl) return;
     e.stopPropagation(); e.preventDefault();
+    showLogoEditor(imgEl,e.currentTarget);
+  }
+
+  /* guide §3: small floating panel with Image replace + Brand name text edit */
+  function showLogoEditor(imgEl,wrapperEl){
+    var existing=document.getElementById('ap-logo-editor');
+    if(existing){ existing.remove(); return; }
     var key=imgEl.getAttribute('data-key');
-    var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
-    inp.addEventListener('change',function(){
-      var file=inp.files&&inp.files[0]; if(!file) return;
-      var reader=new FileReader();
-      reader.onload=function(ev){
-        var dataUrl=ev.target.result;
-        document.querySelectorAll('[data-editable-image][data-key="'+key+'"]').forEach(function(img){ img.src=dataUrl; });
-        localStorage.setItem(IMG_KEY+key,dataUrl);
-        S.dirty=true; toast('Image updated — hit Save to keep it.');
-      };
-      reader.readAsDataURL(file);
+    var brandEl=document.querySelector('[data-key="brand.name"]');
+    var currentName=brandEl?brandEl.textContent.trim():'';
+    var editor=document.createElement('div'); editor.id='ap-logo-editor';
+    editor.innerHTML=
+      '<div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Logo &amp; Brand Name</div>'+
+      '<button id="ap-logo-img-btn" class="ap-add-btn-sm" style="width:100%;margin-bottom:8px">🖼 Replace Logo Image</button>'+
+      '<label class="ap-lbl" style="display:block;margin-bottom:2px">Brand Name Text</label>'+
+      '<input id="ap-logo-name-inp" class="ap-inp" type="text" value="'+escH(currentName)+'" placeholder="Brand name" />'+
+      '<button id="ap-logo-ed-close" style="position:absolute;top:6px;right:8px;background:none;border:none;color:#64748b;cursor:pointer;font-size:13px;padding:2px 4px">✕</button>';
+    /* Position near the logo wrapper */
+    var ref=wrapperEl||imgEl;
+    var rect=ref.getBoundingClientRect();
+    editor.style.cssText='position:fixed;z-index:100003;background:#0f0f1a;color:#e2e8f0;border-radius:10px;'+
+      'padding:12px 14px 14px;width:230px;box-shadow:0 16px 48px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.09);'+
+      'font-family:system-ui,sans-serif;font-size:13px;';
+    editor.style.top=Math.min(rect.bottom+6,window.innerHeight-160)+'px';
+    editor.style.left=Math.max(8,Math.min(rect.left,window.innerWidth-250))+'px';
+    document.body.appendChild(editor);
+    document.getElementById('ap-logo-ed-close').addEventListener('click',function(){ editor.remove(); });
+    document.getElementById('ap-logo-img-btn').addEventListener('click',function(ev){
+      ev.preventDefault();
+      var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+      inp.addEventListener('change',function(){
+        var file=inp.files&&inp.files[0]; if(!file) return;
+        var reader=new FileReader();
+        reader.onload=function(ev2){
+          var dataUrl=ev2.target.result;
+          document.querySelectorAll('[data-editable-image][data-key="'+key+'"]').forEach(function(img){ img.src=dataUrl; });
+          localStorage.setItem(IMG_KEY+key,dataUrl);
+          S.dirty=true; toast('Logo updated — hit Save to keep it.');
+        };
+        reader.readAsDataURL(file);
+      });
+      inp.click();
     });
-    inp.click();
+    document.getElementById('ap-logo-name-inp').addEventListener('input',function(ev){
+      var val=ev.target.value;
+      document.querySelectorAll('[data-key="brand.name"]').forEach(function(el){ el.textContent=val; });
+      S.dirty=true;
+    });
+    /* Close on click outside */
+    function outsideClose(e2){
+      if(!editor.contains(e2.target)){ editor.remove(); document.removeEventListener('click',outsideClose,true); }
+    }
+    setTimeout(function(){ document.addEventListener('click',outsideClose,true); },80);
   }
 
   /* guide §4 logo: in edit mode click → replace image, NOT scroll */
@@ -555,7 +745,7 @@
         '<div id="ap-toolbar-actions">'+
           '<button id="ap-btn-content" class="ap-btn-secondary">☰ Content</button>'+
           '<button id="ap-btn-colors">🎨 Colors</button>'+
-          '<button id="ap-btn-sections">🖼 Sections</button>'+
+          '<button id="ap-btn-backgrounds">🖼 Backgrounds</button>'+
           '<button id="ap-btn-promo">✦ Promo</button>'+
           (canRestore?'<button id="ap-btn-restore" class="ap-btn-danger">↩ Restore</button>':'')+
           '<button id="ap-btn-preview">👁 Preview</button>'+
@@ -568,7 +758,7 @@
 
     document.getElementById('ap-btn-content').addEventListener('click',function(){ openPanel(); });
     document.getElementById('ap-btn-colors').addEventListener('click',openColorsModal);
-    document.getElementById('ap-btn-sections').addEventListener('click',openSectionBgModal);
+    document.getElementById('ap-btn-backgrounds').addEventListener('click',openBgPanel);
     document.getElementById('ap-btn-promo').addEventListener('click',openPromoModal);
     document.getElementById('ap-btn-preview').addEventListener('click',enterPreview);
     document.getElementById('ap-btn-exit').addEventListener('click',function(){ exitEditMode(false); });
@@ -1361,31 +1551,31 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     BRAND COLORS MODAL  (guide §9: Primary/Secondary/Accent ONLY)
+     BRAND COLORS MODAL  (guide §4: ALL site hexes, Color 1/2/3…)
   ══════════════════════════════════════════════════════════════ */
   function openColorsModal(){
     var ex=document.getElementById('ap-colors-modal'); if(ex){ ex.remove(); return; }
-    var saved=readJSON(COLOR_KEY)||{};
-    var root=document.documentElement;
+    var savedHex=readJSON(HEX_COLOR_KEY)||{};
+    var colors=getSiteColors();
+    /* Merge any previously-remapped hexes: the "current" value for a color is savedHex[original] if set */
     var modal=document.createElement('div'); modal.id='ap-colors-modal';
     modal.innerHTML=
       '<div class="ap-modal-hd" id="ap-colors-hd">'+
-        '<span>🎨 Brand Colors</span>'+
+        '<span>🎨 Colors</span>'+
         '<button class="ap-modal-close" id="ap-colors-close">✕</button>'+
       '</div>'+
-      '<p class="ap-hint" style="padding:8px 16px 0;font-size:11px">Updates all uses of each color site-wide. Save to keep.</p>'+
-      '<p class="ap-hint" style="padding:2px 16px 0;font-size:10px">Section backgrounds are edited separately via 🖼 Sections.</p>'+
+      '<p class="ap-hint" style="padding:8px 16px 2px;font-size:11px">All colors found on this site. Changing a swatch updates every use of that color immediately.</p>'+
+      '<p class="ap-hint" style="padding:0 16px 4px;font-size:10px">Section backgrounds → 🖼 Backgrounds panel.</p>'+
       '<div id="ap-swatches">'+
-        BRAND_COLORS.map(function(bc){
-          var cur=saved[bc.varName]||root.style.getPropertyValue(bc.varName).trim()||getComputedStyle(root).getPropertyValue(bc.varName).trim()||bc.hex;
-          if(!cur||cur[0]!=='#') cur=bc.hex;
-          return '<div class="ap-swatch-row">'+
-            '<label class="ap-swatch-lbl">'+escH(bc.label)+'</label>'+
+        (colors.length ? colors.map(function(origHex,i){
+          var cur=savedHex[origHex]||origHex;
+          return '<div class="ap-swatch-row" data-orig="'+escH(origHex)+'">'+
+            '<label class="ap-swatch-lbl">Color '+(i+1)+'</label>'+
             '<div class="ap-swatch-ctrl">'+
-              '<input type="color" class="ap-swatch-inp" data-var="'+bc.varName+'" value="'+escH(cur)+'" />'+
+              '<input type="color" class="ap-swatch-inp" data-site-hex="'+escH(cur)+'" value="'+escH(cur)+'" />'+
               '<span class="ap-swatch-hex">'+escH(cur)+'</span>'+
             '</div></div>';
-        }).join('')+
+        }).join('') : '<p class="ap-empty" style="padding:12px">No colors detected.</p>')+
       '</div>'+
       '<div style="padding:10px 16px 14px">'+
         '<button id="ap-colors-save" class="ap-btn-full-primary">Save Colors</button>'+
@@ -1395,177 +1585,189 @@
     document.getElementById('ap-colors-close').addEventListener('click',function(){ modal.remove(); });
     modal.querySelectorAll('.ap-swatch-inp').forEach(function(inp){
       inp.addEventListener('input',function(){
-        var varName=inp.getAttribute('data-var'); var hex=inp.value;
-        root.style.setProperty(varName,hex);
-        var bc=BRAND_COLORS.find(function(c){ return c.varName===varName; });
-        if(bc&&bc.hslVar) root.style.setProperty(bc.hslVar,hexToHSL(hex));
+        var oldHex=inp.getAttribute('data-site-hex');
+        var newHex=inp.value;
+        updateAllHexUses(oldHex,newHex);
+        inp.setAttribute('data-site-hex',newHex); /* track so next change uses the right old value */
         var row=inp.closest('.ap-swatch-row');
-        if(row){ var hl=row.querySelector('.ap-swatch-hex'); if(hl) hl.textContent=hex; }
+        if(row){ var hl=row.querySelector('.ap-swatch-hex'); if(hl) hl.textContent=newHex; }
         S.dirty=true;
       });
     });
     document.getElementById('ap-colors-save').addEventListener('click',function(){
       var toSave={};
-      modal.querySelectorAll('.ap-swatch-inp').forEach(function(inp){ toSave[inp.getAttribute('data-var')]=inp.value; });
-      localStorage.setItem(COLOR_KEY,JSON.stringify(toSave));
+      modal.querySelectorAll('.ap-swatch-row[data-orig]').forEach(function(row){
+        var origHex=row.getAttribute('data-orig');
+        var inp=row.querySelector('.ap-swatch-inp');
+        if(inp) toSave[origHex]=inp.getAttribute('data-site-hex')||inp.value;
+      });
+      localStorage.setItem(HEX_COLOR_KEY,JSON.stringify(toSave));
       S.dirty=false; toast('Colors saved'); modal.remove();
     });
   }
 
   /* ══════════════════════════════════════════════════════════════
-     SECTION BACKGROUNDS MODAL  (guide §4, §10 — separate from brand)
+     BACKGROUNDS PANEL  (guide §5: accordion, live apply, autofill)
   ══════════════════════════════════════════════════════════════ */
-  function openSectionBgModal(){
-    var ex=document.getElementById('ap-section-bg-modal'); if(ex){ ex.remove(); return; }
+  function openBgPanel(){
+    var ex=document.getElementById('ap-bg-panel'); if(ex){ ex.remove(); return; }
     var saved=readJSON(SECTION_BG_KEY)||{};
-    /* Auto-detect sections and footer */
     var secEls=Array.from(document.querySelectorAll('section[id]')).concat(
-      document.querySelector('footer') ? [document.querySelector('footer')] : []
+      document.querySelector('footer')?[document.querySelector('footer')]:[]
     );
-    var modal=document.createElement('div'); modal.id='ap-section-bg-modal';
+    var panel=document.createElement('div'); panel.id='ap-bg-panel';
     var rows=secEls.map(function(el){
       var secId=el.id||'footer';
-      var label=el.tagName==='FOOTER'?'Footer':secId.replace(/-/g,' ').replace(/\b\w/g,function(c){ return c.toUpperCase(); });
-      var bg=saved[secId]||{};
-      var type=bg.type||'gradient';
-      var startColor=bg.start||'#5B2DA8';
-      var endColor=bg.end||'#A472F0';
-      var angle=bg.angle||135;
-      var solid=bg.solid||'#ffffff';
-      var imageSrc=bg.imageSrc||'';
-      var isImage=type==='image';
-      return '<div class="ap-promo-block ap-sec-row" data-sec-id="'+escH(secId)+'">'+
-        '<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">'+escH(label)+'</div>'+
-        '<select class="ap-inp ap-sec-bg-type" style="margin-bottom:5px">'+
-          '<option value="gradient"'+(type==='gradient'?' selected':'')+'>Gradient</option>'+
-          '<option value="solid"'+(type==='solid'?' selected':'')+'>Solid color</option>'+
-          '<option value="image"'+(isImage?' selected':'')+'>Image upload</option>'+
-        '</select>'+
-        '<div class="ap-sec-gradient-wrap"'+(type!=='gradient'?' style="display:none"':'')+'>'+
-          '<div class="ap-swatch-row"><label class="ap-swatch-lbl">Start</label><div class="ap-swatch-ctrl"><input type="color" class="ap-swatch-inp ap-sec-start" value="'+escH(startColor)+'" /><span class="ap-swatch-hex">'+escH(startColor)+'</span></div></div>'+
-          '<div class="ap-swatch-row"><label class="ap-swatch-lbl">End</label><div class="ap-swatch-ctrl"><input type="color" class="ap-swatch-inp ap-sec-end" value="'+escH(endColor)+'" /><span class="ap-swatch-hex">'+escH(endColor)+'</span></div></div>'+
-          '<div class="ap-swatch-row" style="margin-top:2px"><label class="ap-swatch-lbl">Angle</label>'+
-          '<input type="number" class="ap-inp" min="0" max="360" value="'+escH(String(angle))+'" style="width:64px;padding:4px 7px" /></div>'+
+      var label=el.tagName==='FOOTER'?'Footer':secId.replace(/-/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
+      /* Autofill: saved overrides detected; never mis-detect solid as gradient */
+      var detected=detectCurrentBgFromEl(el);
+      var bg=saved[secId]||detected;
+      var type=bg.type||detected.type||'gradient';
+      var solid=(type==='solid')?(bg.solid||detected.solid||'#ffffff'):'#ffffff';
+      var start=(type==='gradient')?(bg.start||detected.start||'#5B2DA8'):'#5B2DA8';
+      var end=(type==='gradient')?(bg.end||detected.end||'#A472F0'):'#A472F0';
+      var angle=(type==='gradient')?(bg.angle||detected.angle||135):135;
+      var imageSrc=(type==='image')?(bg.imageSrc||''):'';
+      return '<details class="ap-acc ap-bg-acc" data-sec-id="'+escH(secId)+'">'+
+        '<summary class="ap-acc-hd">'+escH(label)+'</summary>'+
+        '<div class="ap-acc-body">'+
+          '<label class="ap-lbl">Type</label>'+
+          '<select class="ap-inp ap-sec-bg-type" style="margin-bottom:6px">'+
+            '<option value="solid"'+(type==='solid'?' selected':'')+'>Solid color</option>'+
+            '<option value="gradient"'+(type==='gradient'?' selected':'')+'>Gradient</option>'+
+            '<option value="image"'+(type==='image'?' selected':'')+'>Image upload</option>'+
+          '</select>'+
+          '<div class="ap-sec-solid-wrap"'+(type!=='solid'?' style="display:none"':'')+'>'+
+            '<div class="ap-swatch-row"><label class="ap-swatch-lbl">Color</label><div class="ap-swatch-ctrl"><input type="color" class="ap-swatch-inp ap-sec-solid ap-bg-live" value="'+escH(solid)+'" /><span class="ap-swatch-hex">'+escH(solid)+'</span></div></div>'+
+          '</div>'+
+          '<div class="ap-sec-gradient-wrap"'+(type!=='gradient'?' style="display:none"':'')+'>'+
+            '<div class="ap-swatch-row"><label class="ap-swatch-lbl">Start</label><div class="ap-swatch-ctrl"><input type="color" class="ap-swatch-inp ap-sec-start ap-bg-live" value="'+escH(start)+'" /><span class="ap-swatch-hex">'+escH(start)+'</span></div></div>'+
+            '<div class="ap-swatch-row"><label class="ap-swatch-lbl">End</label><div class="ap-swatch-ctrl"><input type="color" class="ap-swatch-inp ap-sec-end ap-bg-live" value="'+escH(end)+'" /><span class="ap-swatch-hex">'+escH(end)+'</span></div></div>'+
+            '<div class="ap-swatch-row" style="margin-top:2px"><label class="ap-swatch-lbl">Angle °</label>'+
+            '<input type="number" class="ap-inp ap-bg-live" min="0" max="360" value="'+escH(String(angle))+'" style="width:68px;padding:4px 7px" /></div>'+
+          '</div>'+
+          '<div class="ap-sec-image-wrap"'+(type!=='image'?' style="display:none"':'')+'>'+
+            '<input type="hidden" class="ap-sec-img-data" value="'+escH(imageSrc)+'" />'+
+            '<button class="ap-add-btn-sm ap-sec-img-upload-btn" style="width:100%;margin-bottom:4px">🖼 Upload Background Image</button>'+
+            (imageSrc?'<p class="ap-hint" style="color:#4ade80">✓ Image loaded</p>':'<p class="ap-hint ap-sec-img-status">No image selected</p>')+
+          '</div>'+
         '</div>'+
-        '<div class="ap-sec-solid-wrap"'+(type!=='solid'?' style="display:none"':'')+'>'+
-          '<div class="ap-swatch-row"><label class="ap-swatch-lbl">Color</label><div class="ap-swatch-ctrl"><input type="color" class="ap-swatch-inp ap-sec-solid" value="'+escH(solid)+'" /><span class="ap-swatch-hex">'+escH(solid)+'</span></div></div>'+
-        '</div>'+
-        '<div class="ap-sec-image-wrap"'+(!isImage?' style="display:none"':'')+'>'+
-          '<input type="hidden" class="ap-sec-img-data" value="'+escH(imageSrc)+'" />'+
-          '<button class="ap-add-btn-sm ap-sec-img-upload-btn" style="width:100%;margin-bottom:4px">🖼 Upload Background Image</button>'+
-          (imageSrc?'<p class="ap-hint" style="color:#4ade80">✓ Image loaded</p>':'<p class="ap-hint ap-sec-img-status">No image selected</p>')+
-        '</div>'+
-        '<button class="ap-add-btn-sm ap-sec-apply-btn" style="margin-top:5px;width:100%">↻ Preview</button>'+
-      '</div>';
+      '</details>';
     }).join('');
-    modal.innerHTML=
-      '<div class="ap-modal-hd" id="ap-section-bg-hd">'+
-        '<span>🖼 Section Backgrounds</span>'+
-        '<button class="ap-modal-close" id="ap-section-bg-close">✕</button>'+
-      '</div>'+
-      '<div id="ap-section-bg-body">'+
-        '<p class="ap-hint" style="padding:8px 16px 4px;font-size:11px">Per-section background colors. Not in brand palette.</p>'+
-        rows+
-        '<div style="padding:10px 16px 14px"><button id="ap-sec-bg-save" class="ap-btn-full-primary">Save Section Backgrounds</button></div>'+
-      '</div>';
-    document.body.appendChild(modal);
-    makeDraggable(modal,document.getElementById('ap-section-bg-hd'));
-    document.getElementById('ap-section-bg-close').addEventListener('click',function(){ modal.remove(); });
 
-    /* Wire type selectors */
-    modal.querySelectorAll('.ap-sec-bg-type').forEach(function(sel){
+    panel.innerHTML=
+      '<div class="ap-modal-hd" id="ap-bg-panel-hd">'+
+        '<span>🖼 Backgrounds</span>'+
+        '<button class="ap-modal-close" id="ap-bg-panel-close">✕</button>'+
+      '</div>'+
+      '<div id="ap-bg-panel-body">'+
+        '<p class="ap-hint" style="padding:8px 16px 4px;font-size:11px">Per-section background. Changes apply immediately.</p>'+
+        rows+
+        '<div style="padding:10px 16px 14px"><button id="ap-bg-save" class="ap-btn-full-primary">Save Backgrounds</button></div>'+
+      '</div>';
+    document.body.appendChild(panel);
+    makeDraggable(panel,document.getElementById('ap-bg-panel-hd'));
+    document.getElementById('ap-bg-panel-close').addEventListener('click',function(){ panel.remove(); });
+
+    /* Accordion one-open */
+    wireAccordionOneOpen(panel);
+
+    /* Type switcher → show/hide sub-sections + live apply */
+    panel.querySelectorAll('.ap-sec-bg-type').forEach(function(sel){
       sel.addEventListener('change',function(){
-        var row=sel.closest('.ap-sec-row');
-        row.querySelector('.ap-sec-gradient-wrap').style.display=sel.value==='gradient'?'':'none';
+        var row=sel.closest('.ap-bg-acc');
         row.querySelector('.ap-sec-solid-wrap').style.display=sel.value==='solid'?'':'none';
+        row.querySelector('.ap-sec-gradient-wrap').style.display=sel.value==='gradient'?'':'none';
         row.querySelector('.ap-sec-image-wrap').style.display=sel.value==='image'?'':'none';
+        applySectionBgAccRow(row); /* live apply on type change */
       });
     });
 
-    /* Wire image upload buttons */
-    modal.querySelectorAll('.ap-sec-img-upload-btn').forEach(function(btn){
-      btn.addEventListener('click',function(e){
-        e.preventDefault();
-        var row=btn.closest('.ap-sec-row');
-        var inp3=document.createElement('input'); inp3.type='file'; inp3.accept='image/*';
-        inp3.addEventListener('change',function(){
-          var file=inp3.files&&inp3.files[0]; if(!file) return;
+    /* Live apply on every color/number change */
+    panel.querySelectorAll('.ap-bg-live').forEach(function(inp){
+      function live(){
+        /* Update hex label */
+        if(inp.type==='color'){
+          var hexLabel=inp.closest('.ap-swatch-row')&&inp.closest('.ap-swatch-row').querySelector('.ap-swatch-hex');
+          if(hexLabel) hexLabel.textContent=inp.value;
+        }
+        applySectionBgAccRow(inp.closest('.ap-bg-acc'));
+      }
+      inp.addEventListener('input',live);
+      inp.addEventListener('change',live);
+    });
+
+    /* Image upload → live apply */
+    panel.querySelectorAll('.ap-sec-img-upload-btn').forEach(function(btn){
+      btn.addEventListener('click',function(ev){
+        ev.preventDefault();
+        var row=btn.closest('.ap-bg-acc');
+        var fi=document.createElement('input'); fi.type='file'; fi.accept='image/*';
+        fi.addEventListener('change',function(){
+          var file=fi.files&&fi.files[0]; if(!file) return;
           var reader=new FileReader();
-          reader.onload=function(ev){
-            var dataUrl=ev.target.result;
-            var hiddenInp=row.querySelector('.ap-sec-img-data');
-            if(hiddenInp) hiddenInp.value=dataUrl;
+          reader.onload=function(ev2){
+            var dataUrl=ev2.target.result;
+            var hidInp=row.querySelector('.ap-sec-img-data');
+            if(hidInp) hidInp.value=dataUrl;
             var status=row.querySelector('.ap-sec-img-status');
-            if(status){ status.textContent='✓ Image loaded'; status.style.color='#4ade80'; }
+            if(status){status.textContent='✓ Image loaded';status.style.color='#4ade80';}
+            applySectionBgAccRow(row); /* live apply */
             S.dirty=true;
           };
           reader.readAsDataURL(file);
         });
-        inp3.click();
+        fi.click();
       });
     });
 
-    /* Wire color pickers → update hex label */
-    modal.querySelectorAll('.ap-swatch-inp').forEach(function(inp){
-      inp.addEventListener('input',function(){
-        var row=inp.closest('.ap-swatch-row');
-        if(row){ var hl=row.querySelector('.ap-swatch-hex'); if(hl) hl.textContent=inp.value; }
-        S.dirty=true;
-      });
-    });
-
-    /* Preview (apply) buttons */
-    modal.querySelectorAll('.ap-sec-apply-btn').forEach(function(btn){
-      btn.addEventListener('click',function(){
-        var row=btn.closest('.ap-sec-row');
-        applySectionBgRow(row);
-      });
-    });
-
-    /* Save all */
-    document.getElementById('ap-sec-bg-save').addEventListener('click',function(){
+    /* Save */
+    document.getElementById('ap-bg-save').addEventListener('click',function(){
       var toSave={};
-      modal.querySelectorAll('.ap-sec-row').forEach(function(row){
+      panel.querySelectorAll('.ap-bg-acc').forEach(function(row){
         var secId=row.getAttribute('data-sec-id');
         var type=row.querySelector('.ap-sec-bg-type').value;
         if(type==='solid'){
-          toSave[secId]={ type:'solid', solid:row.querySelector('.ap-sec-solid').value };
+          toSave[secId]={type:'solid',solid:row.querySelector('.ap-sec-solid').value};
         } else if(type==='image'){
-          var hiddenInp=row.querySelector('.ap-sec-img-data');
-          toSave[secId]={ type:'image', imageSrc:hiddenInp?hiddenInp.value:'' };
+          var hidInp=row.querySelector('.ap-sec-img-data');
+          toSave[secId]={type:'image',imageSrc:hidInp?hidInp.value:''};
         } else {
-          var angleInp=row.querySelector('input[type="number"]');
-          toSave[secId]={ type:'gradient',
+          var aInp=row.querySelector('input[type="number"]');
+          toSave[secId]={type:'gradient',
             start:row.querySelector('.ap-sec-start').value,
             end:row.querySelector('.ap-sec-end').value,
-            angle:angleInp?parseInt(angleInp.value,10)||135:135 };
+            angle:aInp?parseInt(aInp.value,10)||135:135};
         }
-        applySectionBgRow(row);
       });
       localStorage.setItem(SECTION_BG_KEY,JSON.stringify(toSave));
-      S.dirty=false; toast('Section backgrounds saved'); modal.remove();
+      S.dirty=false; toast('Backgrounds saved'); panel.remove();
     });
   }
 
-  function applySectionBgRow(row){
+  /* Apply background from an accordion row element — called on every live change */
+  function applySectionBgAccRow(row){
+    if(!row) return;
     var secId=row.getAttribute('data-sec-id');
     var secEl=secId==='footer'?document.querySelector('footer'):document.getElementById(secId);
     if(!secEl) return;
     var type=row.querySelector('.ap-sec-bg-type').value;
     if(type==='solid'){
-      secEl.style.background=row.querySelector('.ap-sec-solid').value;
+      var s=row.querySelector('.ap-sec-solid'); if(s) secEl.style.background=s.value;
     } else if(type==='image'){
-      var hiddenInp=row.querySelector('.ap-sec-img-data');
-      if(hiddenInp&&hiddenInp.value) secEl.style.background='url("'+hiddenInp.value+'") center/cover no-repeat';
+      var h=row.querySelector('.ap-sec-img-data'); if(h&&h.value) secEl.style.background='url("'+h.value+'") center/cover no-repeat';
     } else {
-      var s=row.querySelector('.ap-sec-start').value;
-      var e2=row.querySelector('.ap-sec-end').value;
-      var angleInp=row.querySelector('input[type="number"]');
-      var a=angleInp?parseInt(angleInp.value,10)||135:135;
-      secEl.style.background='linear-gradient('+a+'deg,'+s+' 0%,'+e2+' 100%)';
+      var st=row.querySelector('.ap-sec-start');
+      var en=row.querySelector('.ap-sec-end');
+      var ai=row.querySelector('input[type="number"]');
+      var a=ai?parseInt(ai.value,10)||135:135;
+      if(st&&en) secEl.style.background='linear-gradient('+a+'deg,'+st.value+' 0%,'+en.value+' 100%)';
     }
     S.dirty=true;
   }
+
+  /* Keep old name as alias so any stale references don't break */
+  function openSectionBgModal(){ openBgPanel(); }
 
   /* ══════════════════════════════════════════════════════════════
      PROMO ELEMENTS
@@ -1667,6 +1869,8 @@
     var ex=document.getElementById('ap-promo-modal'); if(ex){ ex.remove(); return; }
     var hasSaved=!!localStorage.getItem(PROMO_KEY);
     var d=hasSaved?(readJSON(PROMO_KEY)||PROMO_STARTER):PROMO_STARTER;
+    /* guide §7: when Promo Section is on, default banner click → promo section */
+    var defaultBannerLink=(d.sectionActive&&(!d.bannerLink||d.bannerLink==="#contact"))?"#ap-promo-section":(d.bannerLink||"#contact");
     var modal=document.createElement('div'); modal.id='ap-promo-modal';
     modal.innerHTML=
       '<div class="ap-modal-hd" id="ap-promo-hd">'+
@@ -1681,7 +1885,7 @@
         '<label class="ap-toggle-row"><input type="checkbox" id="ap-promo-ba"'+(d.bannerActive?' checked':'')+' /> Show Promo Banner</label>'+
         '<div class="ap-promo-sub" id="ap-promo-bfields" style="display:'+(d.bannerActive?'':'none')+'">'+
           '<label class="ap-lbl">Banner Text</label><input class="ap-inp" id="ap-promo-btxt" value="'+escH(d.bannerText||'')+'" />'+
-          '<label class="ap-lbl">Banner Link / URL</label><input class="ap-inp" id="ap-promo-blnk" value="'+escH(d.bannerLink||'')+'" />'+
+          '<label class="ap-lbl">Banner Link / URL</label><input class="ap-inp" id="ap-promo-blnk" value="'+escH(defaultBannerLink)+'" />'+
         '</div>'+
       '</div>'+
       '<div class="ap-promo-block">'+
@@ -1713,6 +1917,15 @@
     });
     document.getElementById('ap-promo-sa').addEventListener('change',function(e){
       document.getElementById('ap-promo-sfields').style.display=e.target.checked?'':'none';
+      /* guide §7: when Promo Section turns ON, default banner link to promo section */
+      var blnk=document.getElementById('ap-promo-blnk');
+      if(blnk){
+        if(e.target.checked&&(blnk.value==='#contact'||!blnk.value)){
+          blnk.value='#ap-promo-section';
+        } else if(!e.target.checked&&blnk.value==='#ap-promo-section'){
+          blnk.value='#contact';
+        }
+      }
     });
     document.getElementById('ap-promo-layout').addEventListener('change',function(){
       var lyt=document.getElementById('ap-promo-layout').value;
@@ -1798,6 +2011,7 @@
     var cm=document.getElementById('ap-colors-modal'); if(cm) cm.style.display='none';
     var pm=document.getElementById('ap-promo-modal'); if(pm) pm.style.display='none';
     var sbm=document.getElementById('ap-section-bg-modal'); if(sbm) sbm.style.display='none';
+    var bgp=document.getElementById('ap-bg-panel'); if(bgp) bgp.style.display='none';
 
     var banner=document.getElementById('ap-promo-banner');
     var bannerH=(banner&&banner.style.display!=='none')?(banner.offsetHeight||40):0;
@@ -1816,6 +2030,7 @@
       var cm2=document.getElementById('ap-colors-modal'); if(cm2) cm2.style.display='';
       var pm2=document.getElementById('ap-promo-modal'); if(pm2) pm2.style.display='';
       var sbm2=document.getElementById('ap-section-bg-modal'); if(sbm2) sbm2.style.display='';
+      var bgp2=document.getElementById('ap-bg-panel'); if(bgp2) bgp2.style.display='';
       updatePageOffsets();
     });
   }
