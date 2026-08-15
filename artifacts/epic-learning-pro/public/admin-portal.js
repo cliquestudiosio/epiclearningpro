@@ -41,13 +41,13 @@
     dirty: false,
   };
 
-  /* ── Brand Colors — guide §9: Primary/Secondary/Accent ONLY
-     No color names ("purple"/"teal"). No gradient stop tokens. ── */
+  /* ── Brand Colors — guide §10: Primary/Secondary/Accent ONLY
+     No color names ("purple"/"teal"). No gradient stop tokens.
+     Section backgrounds are edited separately via 🖼 Sections. ── */
   var BRAND_COLORS = [
     { label: 'Primary',   varName: '--brand-primary',   hslVar: '--primary',   hex: '#8B5FE6' },
     { label: 'Secondary', varName: '--brand-secondary', hslVar: '--secondary', hex: '#36A6DD' },
     { label: 'Accent',    varName: '--brand-accent',    hslVar: '--accent',    hex: '#CAA747' },
-    { label: 'Dark Tint', varName: '--brand-tint',      hslVar: null,          hex: '#7a52d4' },
   ];
 
   /* ══════════════════════════════════════════════════════════════
@@ -212,7 +212,7 @@
     }
   }
 
-  /* Guide §10: section backgrounds separate from brand palette */
+  /* Guide §5: section backgrounds — solid / gradient / image — separate from brand palette */
   function applySectionBgs(bgs){
     if(!bgs) return;
     Object.keys(bgs).forEach(function(secId){
@@ -222,6 +222,8 @@
       if(bg.type==='solid'){ secEl.style.background=bg.solid||''; }
       else if(bg.type==='gradient'){
         secEl.style.background='linear-gradient('+(bg.angle||135)+'deg,'+bg.start+' 0%,'+bg.end+' 100%)';
+      } else if(bg.type==='image'&&bg.imageSrc){
+        secEl.style.background='url("'+bg.imageSrc+'") center/cover no-repeat';
       }
     });
   }
@@ -395,6 +397,10 @@
     document.querySelectorAll('[data-editable-image]').forEach(function(el){
       if(!el.closest('[data-editable-list]')) el.addEventListener('click',handleImageClick,true);
     });
+    /* guide §4: logo wrapper buttons — intercept in capture phase so React onClick does not scroll/navigate */
+    document.querySelectorAll('[data-testid="link-logo-home"],[data-testid="button-footer-home"]').forEach(function(btn){
+      btn.addEventListener('click',handleLogoWrapperClick,true);
+    });
     /* Hero CTAs — open nav panel, not in-place */
     document.querySelectorAll('[data-key^="hero.cta-"]').forEach(function(el){
       el.addEventListener('click',handleHeroCtaClick,true);
@@ -428,6 +434,7 @@
     document.querySelectorAll('[data-editable-contact]').forEach(function(el){ el.removeEventListener('click',handleContactClick,true); });
     document.querySelectorAll('[data-editable-nav]').forEach(function(el){ el.removeEventListener('click',handleNavClick,true); });
     document.querySelectorAll('[data-editable-image]').forEach(function(el){ el.removeEventListener('click',handleImageClick,true); });
+    document.querySelectorAll('[data-testid="link-logo-home"],[data-testid="button-footer-home"]').forEach(function(btn){ btn.removeEventListener('click',handleLogoWrapperClick,true); });
     document.querySelectorAll('[data-key^="hero.cta-"]').forEach(function(el){ el.removeEventListener('click',handleHeroCtaClick,true); });
 
     var hdr=document.querySelector('header'); if(hdr) hdr.style.top='';
@@ -481,6 +488,28 @@
     if(S.previewMode) return;
     e.stopPropagation(); e.preventDefault();
     openPanel('nav');
+  }
+
+  /* guide §4: logo WRAPPER button — intercept in capture so React onClick does not scroll/navigate */
+  function handleLogoWrapperClick(e){
+    if(S.previewMode) return;
+    var imgEl=e.currentTarget.querySelector('[data-editable-image]');
+    if(!imgEl) return;
+    e.stopPropagation(); e.preventDefault();
+    var key=imgEl.getAttribute('data-key');
+    var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+    inp.addEventListener('change',function(){
+      var file=inp.files&&inp.files[0]; if(!file) return;
+      var reader=new FileReader();
+      reader.onload=function(ev){
+        var dataUrl=ev.target.result;
+        document.querySelectorAll('[data-editable-image][data-key="'+key+'"]').forEach(function(img){ img.src=dataUrl; });
+        localStorage.setItem(IMG_KEY+key,dataUrl);
+        S.dirty=true; toast('Image updated — hit Save to keep it.');
+      };
+      reader.readAsDataURL(file);
+    });
+    inp.click();
   }
 
   /* guide §4 logo: in edit mode click → replace image, NOT scroll */
@@ -1085,30 +1114,44 @@
       '</div></details>';
   }
 
+  /* guide §3: Contact forms — grouped by placement, labels "Contact link N" never full email strings */
   function buildContactForms(){
-    var els=Array.from(document.querySelectorAll('[data-editable-contact][data-key]'));
-    if(!els.length) return '<p class="ap-empty">No contact elements found.</p>';
-    var seen={}; var uniq=els.filter(function(el){
-      var k=el.getAttribute('data-key'); if(seen[k]) return false; seen[k]=true; return true;
-    });
     var snap=readJSON(STORAGE_KEY)||{};
-    return '<div class="ap-sec-title">Contact & Social Links</div>'+
-      '<p class="ap-hint" style="margin-bottom:8px">Edit visible text and destination for each item.</p>'+
-      uniq.map(function(el){
+    var html='';
+
+    function buildContactGroup(groupTitle,els){
+      html+='<div class="ap-sec-title">'+escH(groupTitle)+'</div>';
+      if(!els.length){ html+='<p class="ap-empty">No links found.</p>'; return; }
+      els.forEach(function(el,i){
         var key=el.getAttribute('data-key');
-        var label=deriveContactLabel(el,key);
         var saved=snap[key]||{};
         var text=saved.text!==undefined?saved.text:(el.textContent||'').trim();
+        /* For buttons, textContent may include icon text — trim and cap */
+        if(text.length>60) text=text.slice(0,60);
         var href=saved.href!==undefined?saved.href:(el.getAttribute('href')||el.getAttribute('data-href')||'');
-        return '<details class="ap-acc">'+
-          '<summary class="ap-acc-hd">'+escH(label)+'</summary>'+
+        html+='<details class="ap-acc">'+
+          '<summary class="ap-acc-hd">Contact link '+(i+1)+'</summary>'+
           '<div class="ap-acc-body">'+
-            '<label class="ap-lbl">Display Text</label>'+
+            '<label class="ap-lbl">Display text</label>'+
             '<input class="ap-inp" type="text" data-tk="'+escH(key)+'" data-tf="text" value="'+escH(text)+'" />'+
-            '<label class="ap-lbl">Link (tel: / mailto: / https://)</label>'+
+            '<label class="ap-lbl">Link URL</label>'+
             '<input class="ap-inp" type="text" data-tk="'+escH(key)+'" data-tf="href" placeholder="mailto:you@example.com" value="'+escH(href)+'" />'+
+            '<p class="ap-hint">Use mailto:email@domain.com, tel:+1…, or https://…</p>'+
           '</div></details>';
-      }).join('');
+      });
+    }
+
+    /* Contact section — keys starting with contact.section. */
+    var secEls=Array.from(document.querySelectorAll('[data-editable-contact][data-key^="contact.section."]'));
+    buildContactGroup('Contact Section',secEls);
+
+    html+='<div style="border-top:1px solid rgba(255,255,255,.06);margin:10px 0 6px"></div>';
+
+    /* Footer — keys starting with footer.link- */
+    var footEls=Array.from(document.querySelectorAll('[data-editable-contact][data-key^="footer.link-"]'));
+    buildContactGroup('Footer',footEls);
+
+    return html||'<p class="ap-empty">No contact elements found.</p>';
   }
 
   /* ── Shared field helpers ────────────────────────────────── */
@@ -1389,20 +1432,28 @@
       var endColor=bg.end||'#A472F0';
       var angle=bg.angle||135;
       var solid=bg.solid||'#ffffff';
+      var imageSrc=bg.imageSrc||'';
+      var isImage=type==='image';
       return '<div class="ap-promo-block ap-sec-row" data-sec-id="'+escH(secId)+'">'+
         '<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">'+escH(label)+'</div>'+
         '<select class="ap-inp ap-sec-bg-type" style="margin-bottom:5px">'+
           '<option value="gradient"'+(type==='gradient'?' selected':'')+'>Gradient</option>'+
           '<option value="solid"'+(type==='solid'?' selected':'')+'>Solid color</option>'+
+          '<option value="image"'+(isImage?' selected':'')+'>Image upload</option>'+
         '</select>'+
-        '<div class="ap-sec-gradient-wrap"'+(type==='solid'?' style="display:none"':'')+'>'+
+        '<div class="ap-sec-gradient-wrap"'+(type!=='gradient'?' style="display:none"':'')+'>'+
           '<div class="ap-swatch-row"><label class="ap-swatch-lbl">Start</label><div class="ap-swatch-ctrl"><input type="color" class="ap-swatch-inp ap-sec-start" value="'+escH(startColor)+'" /><span class="ap-swatch-hex">'+escH(startColor)+'</span></div></div>'+
           '<div class="ap-swatch-row"><label class="ap-swatch-lbl">End</label><div class="ap-swatch-ctrl"><input type="color" class="ap-swatch-inp ap-sec-end" value="'+escH(endColor)+'" /><span class="ap-swatch-hex">'+escH(endColor)+'</span></div></div>'+
           '<div class="ap-swatch-row" style="margin-top:2px"><label class="ap-swatch-lbl">Angle</label>'+
           '<input type="number" class="ap-inp" min="0" max="360" value="'+escH(String(angle))+'" style="width:64px;padding:4px 7px" /></div>'+
         '</div>'+
-        '<div class="ap-sec-solid-wrap"'+(type==='gradient'?' style="display:none"':'')+'>'+
+        '<div class="ap-sec-solid-wrap"'+(type!=='solid'?' style="display:none"':'')+'>'+
           '<div class="ap-swatch-row"><label class="ap-swatch-lbl">Color</label><div class="ap-swatch-ctrl"><input type="color" class="ap-swatch-inp ap-sec-solid" value="'+escH(solid)+'" /><span class="ap-swatch-hex">'+escH(solid)+'</span></div></div>'+
+        '</div>'+
+        '<div class="ap-sec-image-wrap"'+(!isImage?' style="display:none"':'')+'>'+
+          '<input type="hidden" class="ap-sec-img-data" value="'+escH(imageSrc)+'" />'+
+          '<button class="ap-add-btn-sm ap-sec-img-upload-btn" style="width:100%;margin-bottom:4px">🖼 Upload Background Image</button>'+
+          (imageSrc?'<p class="ap-hint" style="color:#4ade80">✓ Image loaded</p>':'<p class="ap-hint ap-sec-img-status">No image selected</p>')+
         '</div>'+
         '<button class="ap-add-btn-sm ap-sec-apply-btn" style="margin-top:5px;width:100%">↻ Preview</button>'+
       '</div>';
@@ -1427,6 +1478,30 @@
         var row=sel.closest('.ap-sec-row');
         row.querySelector('.ap-sec-gradient-wrap').style.display=sel.value==='gradient'?'':'none';
         row.querySelector('.ap-sec-solid-wrap').style.display=sel.value==='solid'?'':'none';
+        row.querySelector('.ap-sec-image-wrap').style.display=sel.value==='image'?'':'none';
+      });
+    });
+
+    /* Wire image upload buttons */
+    modal.querySelectorAll('.ap-sec-img-upload-btn').forEach(function(btn){
+      btn.addEventListener('click',function(e){
+        e.preventDefault();
+        var row=btn.closest('.ap-sec-row');
+        var inp3=document.createElement('input'); inp3.type='file'; inp3.accept='image/*';
+        inp3.addEventListener('change',function(){
+          var file=inp3.files&&inp3.files[0]; if(!file) return;
+          var reader=new FileReader();
+          reader.onload=function(ev){
+            var dataUrl=ev.target.result;
+            var hiddenInp=row.querySelector('.ap-sec-img-data');
+            if(hiddenInp) hiddenInp.value=dataUrl;
+            var status=row.querySelector('.ap-sec-img-status');
+            if(status){ status.textContent='✓ Image loaded'; status.style.color='#4ade80'; }
+            S.dirty=true;
+          };
+          reader.readAsDataURL(file);
+        });
+        inp3.click();
       });
     });
 
@@ -1455,6 +1530,9 @@
         var type=row.querySelector('.ap-sec-bg-type').value;
         if(type==='solid'){
           toSave[secId]={ type:'solid', solid:row.querySelector('.ap-sec-solid').value };
+        } else if(type==='image'){
+          var hiddenInp=row.querySelector('.ap-sec-img-data');
+          toSave[secId]={ type:'image', imageSrc:hiddenInp?hiddenInp.value:'' };
         } else {
           var angleInp=row.querySelector('input[type="number"]');
           toSave[secId]={ type:'gradient',
@@ -1476,12 +1554,15 @@
     var type=row.querySelector('.ap-sec-bg-type').value;
     if(type==='solid'){
       secEl.style.background=row.querySelector('.ap-sec-solid').value;
+    } else if(type==='image'){
+      var hiddenInp=row.querySelector('.ap-sec-img-data');
+      if(hiddenInp&&hiddenInp.value) secEl.style.background='url("'+hiddenInp.value+'") center/cover no-repeat';
     } else {
       var s=row.querySelector('.ap-sec-start').value;
-      var e=row.querySelector('.ap-sec-end').value;
+      var e2=row.querySelector('.ap-sec-end').value;
       var angleInp=row.querySelector('input[type="number"]');
       var a=angleInp?parseInt(angleInp.value,10)||135:135;
-      secEl.style.background='linear-gradient('+a+'deg,'+s+' 0%,'+e+' 100%)';
+      secEl.style.background='linear-gradient('+a+'deg,'+s+' 0%,'+e2+' 100%)';
     }
     S.dirty=true;
   }
@@ -1542,7 +1623,8 @@
     var banner=document.getElementById('ap-promo-banner');
     var sec=document.getElementById('ap-promo-section');
     if(banner){
-      banner.style.display=d.bannerActive?'':'none';
+      /* guide §11: must use 'block', not '' — CSS default is display:none */
+      banner.style.display=d.bannerActive?'block':'none';
       var bt=banner.querySelector('#ap-promo-banner-text'); if(bt&&d.bannerText) bt.textContent=d.bannerText;
       var bl=banner.querySelector('#ap-promo-banner-cta'); if(bl&&d.bannerLink) bl.href=d.bannerLink;
     }

@@ -772,14 +772,16 @@ export default function Home() {
             </FadeIn>
 
             <FadeIn delay={0.3} className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
-              <button onClick={copyEmail} data-editable-contact="" data-key="contact.email"
+              {/* Contact section links — separate keys from footer (guide §3) */}
+              <button onClick={copyEmail} data-editable-contact="" data-key="contact.section.link-1"
+                data-href="mailto:contact@epiclearningpro.com"
                 className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors">
                 {copiedEmail ? <CheckCircle2 size={16} /> : <Mail size={16} />}
                 {copiedEmail ? 'Copied!' : 'contact@epiclearningpro.com'}
               </button>
               <span className="hidden sm:block text-white/30">·</span>
               <a href="https://www.alignable.com/paulden-az/epic-learning-pro" target="_blank" rel="noopener noreferrer"
-                data-editable-contact="" data-key="contact.alignable"
+                data-editable-contact="" data-key="contact.section.link-2"
                 className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors">
                 Connect on Alignable
               </a>
@@ -801,12 +803,13 @@ export default function Home() {
                 data-editable="" data-key="brand.name">Epic Learning Pro</span>
             </button>
             <div className="flex items-center gap-5 text-sm text-muted-foreground">
-              {/* Footer social + email — editable via side panel */}
+              {/* Footer links — separate keys from contact section (guide §3) */}
               <a href="https://www.alignable.com/paulden-az/epic-learning-pro" target="_blank" rel="noopener noreferrer"
                 className="hover:text-primary transition-colors"
-                data-editable-contact="" data-key="social.alignable">Alignable</a>
+                data-editable-contact="" data-key="footer.link-1">Alignable</a>
               <button onClick={copyEmail} className="hover:text-primary transition-colors"
-                data-editable-contact="" data-key="contact.email">
+                data-editable-contact="" data-key="footer.link-2"
+                data-href="mailto:contact@epiclearningpro.com">
                 {copiedEmail ? 'Copied!' : 'Email'}
               </button>
             </div>
