@@ -230,7 +230,8 @@ export default function Home() {
           <button onClick={() => scrollTo('hero')} className="flex items-center gap-2 group outline-none" data-testid="link-logo-home">
             <img src={logoPath} alt="Epic Learning Pro Logo" className="h-10 w-10 sm:h-12 sm:w-12 rounded-full shadow-sm transition-transform duration-300 group-hover:scale-105"
               data-editable-image="" data-key="logo" />
-            <span className={`font-serif font-semibold text-base sm:text-xl tracking-tight transition-colors hidden sm:block ${isScrolled ? "text-foreground hover:text-primary" : "text-white/90 hover:text-white"}`}>
+            <span className={`font-serif font-semibold text-base sm:text-xl tracking-tight transition-colors hidden sm:block ${isScrolled ? "text-foreground hover:text-primary" : "text-white/90 hover:text-white"}`}
+              data-editable="" data-key="brand.name">
               Epic Learning Pro
             </span>
           </button>
@@ -244,11 +245,13 @@ export default function Home() {
               </button>
             ))}
             {isScrolled ? (
-              <Button onClick={() => scrollTo('contact')} className="rounded-full shadow-md hover:shadow-lg transition-all" data-testid="button-header-cta">
+              <Button onClick={() => scrollTo('contact')} className="rounded-full shadow-md hover:shadow-lg transition-all" data-testid="button-header-cta"
+                data-key="nav.cta">
                 Let's Connect
               </Button>
             ) : (
               <button onClick={() => scrollTo('contact')} data-testid="button-header-cta"
+                data-key="nav.cta"
                 className="rounded-full px-5 py-2 text-sm font-semibold bg-white/20 text-white border border-white/30 hover:bg-white/30 transition-all">
                 Let's Connect
               </button>
@@ -569,7 +572,8 @@ export default function Home() {
                 <div className="absolute top-4 left-4 text-5xl leading-none text-primary/15 font-serif select-none">"</div>
                 <p className="text-lg font-serif italic text-foreground relative z-10 text-center px-4"
                   data-editable="" data-key="about.quote">Whatever the mind can think and perceive, it can achieve.</p>
-                <p className="text-sm text-muted-foreground text-center mt-3">— Napoleon Hill</p>
+                <p className="text-sm text-muted-foreground text-center mt-3"
+                  data-editable="" data-key="about.quote-attribution">— Napoleon Hill</p>
               </div>
             </FadeIn>
 
@@ -580,7 +584,8 @@ export default function Home() {
           </div>
 
           <FadeIn>
-            <h3 className="text-2xl sm:text-3xl font-serif font-semibold mb-10 md:mb-14 text-center">Meet the Team</h3>
+            <h3 className="text-2xl sm:text-3xl font-serif font-semibold mb-10 md:mb-14 text-center"
+              data-editable="" data-key="about.team-heading">Meet the Team</h3>
           </FadeIn>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-4xl mx-auto"
@@ -626,7 +631,9 @@ export default function Home() {
           </FadeIn>
 
           <FadeIn delay={0.2}>
-            <Accordion type="single" collapsible className="w-full space-y-3">
+            {/* data-editable-list="faqs" → yellow outline, panel only. Never blue in-place. */}
+            <Accordion type="single" collapsible className="w-full space-y-3"
+              data-editable-list="faqs" data-key="faqs.items">
               {[
                 { q: "What types of coaching do you offer?",
                   a: "We offer coaching for both individuals and businesses. For individuals, we specialize in GED preparation, homeschooling guidance, and supporting parents of children with special needs. For businesses, we provide leadership coaching, HR professional coaching, and custom training program development." },
@@ -641,10 +648,11 @@ export default function Home() {
               ].map((item, i) => (
                 <AccordionItem key={i} value={`item-${i}`} className="bg-white/80 backdrop-blur-sm border border-primary/10 rounded-xl px-5 py-1 shadow-sm">
                   <AccordionTrigger className="text-lg sm:text-xl font-medium hover:no-underline text-foreground hover:text-primary transition-colors text-left py-4 [&>svg]:text-muted-foreground">
-                    <span data-editable="" data-key={`faq.item-${i}-q`}>{item.q}</span>
+                    {/* data-key only — no data-editable; FAQ is yellow panel-only, never blue in-place */}
+                    <span data-key={`faq.item-${i}-q`}>{item.q}</span>
                   </AccordionTrigger>
                   <AccordionContent className="text-muted-foreground text-base sm:text-lg pt-1 pb-4 leading-relaxed">
-                    <span data-editable="" data-key={`faq.item-${i}-a`}>{item.a}</span>
+                    <span data-key={`faq.item-${i}-a`}>{item.a}</span>
                   </AccordionContent>
                 </AccordionItem>
               ))}
@@ -784,20 +792,28 @@ export default function Home() {
       <footer className="py-10 sm:py-12" style={{ background: 'linear-gradient(135deg, #ede8ff 0%, #e4daff 100%)' }}>
         <div className="container mx-auto px-4 sm:px-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-5 mb-7">
+            {/* Logo + brand name — shared data-key="logo" keeps nav + footer in sync */}
             <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
               className="flex items-center gap-3 outline-none hover:opacity-80 transition-opacity" data-testid="button-footer-home">
-              <img src={logoPath} alt="Logo" className="h-9 w-9 rounded-full bg-white shadow-sm p-1" />
-              <span className="font-serif font-semibold text-lg tracking-tight text-foreground">Epic Learning Pro</span>
+              <img src={logoPath} alt="Logo" className="h-9 w-9 rounded-full bg-white shadow-sm p-1"
+                data-editable-image="" data-key="logo" />
+              <span className="font-serif font-semibold text-lg tracking-tight text-foreground"
+                data-editable="" data-key="brand.name">Epic Learning Pro</span>
             </button>
             <div className="flex items-center gap-5 text-sm text-muted-foreground">
-              <a href="https://www.alignable.com/paulden-az/epic-learning-pro" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Alignable</a>
-              <button onClick={copyEmail} className="hover:text-primary transition-colors">
+              {/* Footer social + email — editable via side panel */}
+              <a href="https://www.alignable.com/paulden-az/epic-learning-pro" target="_blank" rel="noopener noreferrer"
+                className="hover:text-primary transition-colors"
+                data-editable-contact="" data-key="social.alignable">Alignable</a>
+              <button onClick={copyEmail} className="hover:text-primary transition-colors"
+                data-editable-contact="" data-key="contact.email">
                 {copiedEmail ? 'Copied!' : 'Email'}
               </button>
             </div>
           </div>
           <div className="border-t border-primary/15 pt-7 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
             <p data-editable="" data-key="footer.copyright">Copyright 2026 © Epic Learning Pro. All rights reserved.</p>
+            {/* "Website Design by…" is NOT editable per guide — no data attributes */}
             <p>Website Design by{' '}
               <a href="https://cliquestudios.io" target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/70 transition-colors">Clique Studios IO</a>
               <span id="ap-gear-anchor"></span>

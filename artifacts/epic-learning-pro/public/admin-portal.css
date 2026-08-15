@@ -1,21 +1,23 @@
 /* ═══════════════════════════════════════════════════════════════════
    Admin Portal — Editor Chrome  (Path A · permanent design system)
-   Fixed design system — does NOT match client brand colors.
+
+   Completely unbranded editor chrome — does NOT use client brand colors.
    Selectors and class names are final; only the storage layer changes.
 
-   Layout hierarchy (top→down when edit mode + banner both on):
-   ┌─ Promo Banner  (position:fixed, z:100000, top:0)
-   ├─ Editor Toolbar (position:fixed, z:99997, top:bannerH via JS)
-   ├─ Sticky Header  (top set via JS = bannerH + toolbarH)
-   └─ Page content   (body padding-top = bannerH + toolbarH)
+   Stacking order (guide §5):
+   ┌─ Editor Toolbar  (position:fixed, z:100000, top:0)          ← ALWAYS absolute top
+   ├─ Promo Banner    (position:fixed, z:99997,  top:toolbarH)   ← below toolbar
+   ├─ Sticky Header   (top set via JS = toolbarH + bannerH)
+   └─ Page content    (body padding-top = toolbarH + bannerH, JS only)
 
-   Outline system:
-   • Blue  dashed = in-place editable (type directly)
-   • Yellow dashed = side-panel only (group outline; click opens panel)
-   • No outline on individual nav buttons (container gets yellow)
+   Outline visual language:
+   • Blue  dashed = in-place editable (direct typing on page)
+   • Yellow dashed = side-panel group (click opens panel)
+   • [data-editable] INSIDE a [data-editable-list] → NO blue outline (panel only)
+   • No outline on individual [data-editable-nav] child buttons (container gets yellow)
 ═══════════════════════════════════════════════════════════════════ */
 
-/* ─── GEAR (inline, vertically centred, desktop only) ─────────────── */
+/* ─── GEAR ───────────────────────────────────────────────────────── */
 #ap-gear {
   display: inline-flex;
   align-items: center;
@@ -35,7 +37,7 @@
 
 /* ─── LOGIN OVERLAY ──────────────────────────────────────────────── */
 #ap-login-overlay {
-  position: fixed; inset: 0; z-index: 99999;
+  position: fixed; inset: 0; z-index: 100002;
   background: rgba(5,3,15,0.65);
   display: flex; align-items: center; justify-content: center;
   backdrop-filter: blur(7px);
@@ -74,9 +76,9 @@
 }
 #ap-login-cancel:hover { color: #555; }
 
-/* ─── TOOLBAR (fixed; JS sets top = bannerHeight) ────────────────── */
+/* ─── TOOLBAR (z:100000, top:0 — ALWAYS absolute top per guide) ──── */
 #ap-toolbar {
-  position: fixed; left: 0; right: 0; z-index: 99997;
+  position: fixed; left: 0; right: 0; z-index: 100000; top: 0;
   background: rgba(10,10,18,0.97); color: #fff;
   box-shadow: 0 1px 0 rgba(255,255,255,.06), 0 4px 24px rgba(0,0,0,.5);
   font-family: system-ui, -apple-system, sans-serif;
@@ -92,371 +94,320 @@
 #ap-toolbar button {
   padding: 5px 11px; border-radius: 7px;
   border: 1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.07); color: #e2e8f0;
-  font-size: 12px; cursor: pointer;
-  transition: background .15s, border-color .15s;
-  white-space: nowrap; font-family: inherit;
+  background: rgba(255,255,255,.07); color: #cbd5e1;
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  font-family: inherit; white-space: nowrap; transition: background .15s, color .15s;
 }
-#ap-toolbar button:hover { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.22); }
-#ap-toolbar .ap-btn-primary  { background: rgba(59,130,246,.82); border-color: rgba(59,130,246,.9); font-weight: 600; }
+#ap-toolbar button:hover { background: rgba(255,255,255,.15); color: #fff; }
+#ap-toolbar .ap-btn-primary {
+  background: rgba(59,130,246,.85); color: #fff;
+  border-color: rgba(59,130,246,.5);
+}
 #ap-toolbar .ap-btn-primary:hover { background: rgba(37,99,235,.92); }
-#ap-toolbar .ap-btn-secondary { border-color: rgba(255,255,255,.2); }
-#ap-toolbar .ap-btn-danger  { border-color: rgba(239,68,68,.35); color: #fca5a5; }
-#ap-toolbar .ap-btn-danger:hover { background: rgba(239,68,68,.15); }
+#ap-toolbar .ap-btn-secondary { background: rgba(255,255,255,.1); }
+#ap-toolbar .ap-btn-danger { background: rgba(185,28,28,.75); color: #fff; border-color: rgba(220,38,38,.4); }
+#ap-toolbar .ap-btn-danger:hover { background: rgba(185,28,28,.92); }
 
-/* Body padding-top managed entirely by JS — no CSS padding-top override */
+/* ─── PROMO BANNER (z:99997, top set via JS below toolbar) ─────────
+   Closing/dismissing must remove space — no white gap.
+   JS sets banner.style.display='none' then calls updatePageOffsets().
+   The CSS must NOT add any static height or margin-top here.          */
+#ap-promo-banner {
+  position: fixed; left: 0; right: 0; z-index: 99997;
+  /* top is set by JS = toolbarH (when edit mode) or 0 (standalone) */
+  background: linear-gradient(90deg, #1a0a3a 0%, #2d1260 50%, #1a0a3a 100%);
+  color: #fff;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  display: none; /* hidden by default; JS shows/hides */
+}
+#ap-promo-banner-inner {
+  display: flex; align-items: center; justify-content: center;
+  gap: 12px; padding: 10px 48px 10px 16px; flex-wrap: wrap;
+  max-width: 1440px; margin: 0 auto;
+}
+#ap-promo-banner-text { color: #e0d4ff; }
+#ap-promo-banner-cta {
+  background: rgba(255,255,255,.18); color: #fff; padding: 4px 14px;
+  border-radius: 20px; font-size: 13px; font-weight: 600; text-decoration: none;
+  border: 1px solid rgba(255,255,255,.28); white-space: nowrap; transition: background .15s;
+}
+#ap-promo-banner-cta:hover { background: rgba(255,255,255,.28); }
+#ap-promo-banner-dismiss {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: rgba(255,255,255,.6); cursor: pointer;
+  font-size: 16px; padding: 4px 6px; line-height: 1; transition: color .15s;
+}
+#ap-promo-banner-dismiss:hover { color: #fff; }
 
-/* ─── EDITABLE STATES ────────────────────────────────────────────── */
+/* ─── OUTLINE SYSTEM ─────────────────────────────────────────────── */
 
-/* ── Blue: truly in-place editable (simple text, not inside a list) ── */
-body.ap-edit-mode [data-editable]:not([data-editable-list] *) {
-  outline: 1.5px dashed rgba(56,182,255,0.6);
-  outline-offset: 3px; border-radius: 3px; cursor: text;
-  transition: outline-color .15s, background .15s;
+/* BLUE dashed = in-place editables that are NOT inside a list */
+.ap-edit-mode [data-editable][data-key]:not([data-editable-list] [data-editable]) {
+  outline: 2px dashed rgba(59,130,246,0.5);
+  outline-offset: 2px;
+  border-radius: 3px;
+  cursor: text;
+  transition: outline-color .15s, background-color .15s;
 }
-body.ap-edit-mode [data-editable]:not([data-editable-list] *):hover {
-  outline: 2px dashed rgba(37,99,235,0.85);
-  background: rgba(59,130,246,0.06) !important;
+.ap-edit-mode [data-editable][data-key]:not([data-editable-list] [data-editable]):hover {
+  outline: 2px dashed rgba(59,130,246,0.9);
+  background-color: rgba(219,234,254,0.25);
 }
-body.ap-edit-mode [data-editable].ap-editing {
-  outline: 2px solid rgb(59,130,246) !important;
-  background: rgba(59,130,246,0.08) !important; cursor: text;
-}
-
-/* ── Yellow: side-panel-only groups ── */
-body.ap-edit-mode [data-editable-list] {
-  outline: 1.5px dashed rgba(251,191,36,0.45);
-  outline-offset: 8px; border-radius: 6px; cursor: pointer;
-  transition: outline-color .15s;
-}
-body.ap-edit-mode [data-editable-list]:hover {
-  outline: 2px dashed rgba(251,191,36,0.85);
-  background: rgba(251,191,36,0.04) !important;
-}
-
-/* Selected card highlight (added via JS when panel item active) */
-body.ap-edit-mode [data-editable-list-selected] {
-  outline: 2.5px solid rgba(251,191,36,0.9) !important;
-  outline-offset: 4px !important;
-  background: rgba(251,191,36,0.08) !important;
-}
-
-/* ── Elements INSIDE list containers: no blue outline ── */
-body.ap-edit-mode [data-editable-list] [data-editable] {
-  outline: none !important; background: transparent !important; cursor: pointer;
-}
-
-/* ── Contact items: yellow (side-panel only) ── */
-body.ap-edit-mode [data-editable-contact] {
-  outline: 1.5px dashed rgba(251,191,36,0.45);
-  outline-offset: 3px; border-radius: 3px; cursor: pointer;
-  transition: outline-color .15s;
-}
-body.ap-edit-mode [data-editable-contact]:hover {
-  outline: 2px dashed rgba(251,191,36,0.85);
-  background: rgba(251,191,36,0.05) !important;
-}
-
-/* ── Nav container: yellow outline; individual buttons: no outline ── */
-body.ap-edit-mode [data-editable-nav] {
-  outline: 1.5px dashed rgba(251,191,36,0.45);
-  outline-offset: 8px; border-radius: 6px; cursor: pointer;
-}
-body.ap-edit-mode [data-editable-nav]:hover {
-  outline: 2px dashed rgba(251,191,36,0.85);
-}
-body.ap-edit-mode [data-editable-nav] [data-key] {
-  outline: none !important; background: transparent !important;
+.ap-edit-mode [data-editable].ap-editing {
+  outline: 2px solid #3b82f6 !important;
+  background-color: rgba(219,234,254,0.35) !important;
+  border-radius: 3px;
 }
 
-/* ── Images ── */
-body.ap-edit-mode [data-editable-image] {
-  pointer-events: auto !important; cursor: pointer;
-  outline: 2px dashed rgba(56,182,255,0.55); outline-offset: 4px;
-  transition: outline-color .15s;
+/* Suppress blue on ANY [data-editable] inside a list — yellow group handles it */
+.ap-edit-mode [data-editable-list] [data-editable] {
+  outline: none !important;
+  cursor: default !important;
+  background-color: transparent !important;
 }
-body.ap-edit-mode [data-editable-image]:hover {
-  outline-color: rgba(37,99,235,0.85);
-}
-body.ap-edit-mode [data-editable-image]::after {
-  content: '🖼 Replace';
-  position: absolute;
-  bottom: 4px; left: 50%; transform: translateX(-50%);
-  background: rgba(0,0,0,0.75); color: #fff;
-  font-size: 11px; padding: 2px 7px; border-radius: 20px;
-  pointer-events: none; white-space: nowrap;
-  font-family: system-ui, sans-serif;
+.ap-edit-mode [data-editable-list] [data-editable].ap-editing {
+  outline: none !important;
+  background-color: transparent !important;
 }
 
-/* ── Preview: strip all chrome ── */
-body.ap-preview-mode [data-editable],
-body.ap-preview-mode [data-editable-list],
-body.ap-preview-mode [data-editable-image],
-body.ap-preview-mode [data-editable-contact],
-body.ap-preview-mode [data-editable-nav] {
-  outline: none !important; background: transparent !important; cursor: default !important;
+/* YELLOW dashed = side-panel groups */
+.ap-edit-mode [data-editable-list],
+.ap-edit-mode [data-editable-contact],
+.ap-edit-mode [data-editable-nav] {
+  outline: 2px dashed rgba(202,167,71,0.55);
+  outline-offset: 3px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: outline-color .15s, background-color .15s;
 }
+.ap-edit-mode [data-editable-list]:hover,
+.ap-edit-mode [data-editable-contact]:hover,
+.ap-edit-mode [data-editable-nav]:hover {
+  outline: 2px dashed rgba(202,167,71,0.9);
+  background-color: rgba(254,243,199,0.15);
+}
+
+/* Individual nav items: NO separate outline (the container gets yellow) */
+.ap-edit-mode [data-editable-nav] [data-key] {
+  outline: none !important;
+  cursor: pointer !important;
+  background-color: transparent !important;
+}
+
+/* Editable image — camera cursor + subtle overlay */
+.ap-edit-mode [data-editable-image] {
+  cursor: pointer;
+  position: relative;
+  outline: 2px dashed rgba(59,130,246,0.5);
+  outline-offset: 2px;
+  border-radius: 4px;
+  transition: opacity .15s;
+}
+.ap-edit-mode [data-editable-image]:hover { opacity: 0.85; }
 
 /* ─── SIDE PANEL ─────────────────────────────────────────────────── */
 #ap-panel {
-  position: fixed; right: 16px; top: 60px; z-index: 99996;
-  width: 340px; max-height: calc(100vh - 76px);
-  background: rgba(12,12,22,0.97);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 14px;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  position: fixed; right: 16px; top: 80px; z-index: 99998;
+  width: 320px; max-height: 80vh;
+  background: #0f0f1a; color: #e2e8f0;
+  border-radius: 14px; overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06);
   display: flex; flex-direction: column;
   font-family: system-ui, -apple-system, sans-serif;
-  backdrop-filter: blur(10px);
-  overflow: hidden;
+  font-size: 13px;
 }
 #ap-panel-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 14px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  flex-shrink: 0; cursor: grab;
+  padding: 12px 14px; background: rgba(255,255,255,.04);
+  border-bottom: 1px solid rgba(255,255,255,.07); flex-shrink: 0;
 }
-#ap-panel-header:active { cursor: grabbing; }
-#ap-panel-title { font-size: 13px; font-weight: 600; color: #e2e8f0; }
-#ap-panel-controls { display: flex; gap: 5px; }
+#ap-panel-title { font-weight: 600; font-size: 13px; color: #e2e8f0; }
+#ap-panel-controls { display: flex; gap: 4px; }
 #ap-panel-controls button {
-  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1);
-  color: #94a3b8; border-radius: 6px; width: 26px; height: 26px;
-  cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center;
-  transition: background .15s, color .15s;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1);
+  color: #94a3b8; cursor: pointer; border-radius: 6px; padding: 2px 8px;
+  font-size: 12px; transition: background .15s; font-family: inherit;
 }
-#ap-panel-controls button:hover { background: rgba(255,255,255,0.15); color: #e2e8f0; }
+#ap-panel-controls button:hover { background: rgba(255,255,255,.15); color: #fff; }
 #ap-panel-tabs {
-  display: flex; flex-wrap: wrap; gap: 4px;
-  padding: 8px 12px 6px; border-bottom: 1px solid rgba(255,255,255,0.07); flex-shrink: 0;
+  display: flex; flex-wrap: wrap; gap: 2px; padding: 8px 10px 6px;
+  border-bottom: 1px solid rgba(255,255,255,.07); flex-shrink: 0;
+  background: rgba(0,0,0,.2);
 }
 .ap-tab {
-  padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500;
-  cursor: pointer; border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.05); color: #94a3b8;
-  transition: all .15s; white-space: nowrap;
+  padding: 4px 9px; border-radius: 6px; border: 1px solid transparent;
+  background: none; color: #94a3b8; cursor: pointer; font-size: 11px;
+  font-weight: 500; font-family: inherit; white-space: nowrap; transition: all .15s;
 }
-.ap-tab:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
-.ap-tab.ap-tab-active {
-  background: rgba(59,130,246,0.75); border-color: rgba(59,130,246,0.9);
-  color: #fff; font-weight: 600;
-}
-#ap-panel-body {
-  overflow-y: auto; flex: 1; padding: 10px 12px 14px;
-  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent;
-}
+.ap-tab:hover { background: rgba(255,255,255,.07); color: #e2e8f0; }
+.ap-tab-active { background: rgba(59,130,246,.25) !important; color: #93c5fd !important; border-color: rgba(59,130,246,.3) !important; }
+#ap-panel-body { overflow-y: auto; flex: 1; padding: 10px 12px 14px; }
 #ap-panel-body::-webkit-scrollbar { width: 4px; }
-#ap-panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+#ap-panel-body::-webkit-scrollbar-track { background: transparent; }
+#ap-panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 2px; }
+
 .ap-sec-title {
-  font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .06em; color: #64748b; margin-bottom: 8px; padding-top: 2px;
+  font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase;
+  letter-spacing: .1em; margin: 6px 0 10px; padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
 }
 
 /* Accordion */
-.ap-acc {
-  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 9px; margin-bottom: 6px; overflow: hidden;
-}
+.ap-acc { border-radius: 8px; overflow: hidden; margin-bottom: 6px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); }
+.ap-acc-removed { opacity: 0.5; }
 .ap-acc-hd {
-  padding: 10px 12px; font-size: 12px; font-weight: 600; color: #cbd5e1;
-  cursor: pointer; list-style: none; user-select: none;
   display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 12px; cursor: pointer; font-weight: 500; font-size: 12px;
+  list-style: none; color: #cbd5e1; user-select: none;
 }
 .ap-acc-hd::-webkit-details-marker { display: none; }
-.ap-acc-hd::after { content: '›'; color: #64748b; font-size: 14px; transition: transform .2s; }
-.ap-acc[open] .ap-acc-hd::after { transform: rotate(90deg); }
-.ap-acc-body { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+.ap-acc-hd:hover { background: rgba(255,255,255,.04); }
+.ap-acc[open] .ap-acc-hd { background: rgba(255,255,255,.05); border-bottom: 1px solid rgba(255,255,255,.06); }
+.ap-acc-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
 
-/* Form fields */
+/* Form inputs */
 .ap-lbl {
   font-size: 10px; font-weight: 600; color: #64748b;
-  text-transform: uppercase; letter-spacing: .04em; margin-top: 4px;
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: -2px;
 }
 .ap-inp {
-  width: 100%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 7px; padding: 8px 10px; color: #e2e8f0; font-size: 13px;
-  outline: none; transition: border-color .15s, background .15s;
-  box-sizing: border-box; font-family: inherit; resize: vertical;
+  width: 100%; padding: 7px 9px; background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.1); border-radius: 7px;
+  color: #e2e8f0; font-size: 12px; font-family: inherit;
+  outline: none; box-sizing: border-box; transition: border-color .15s;
+  resize: vertical;
 }
-.ap-inp:focus { border-color: rgba(59,130,246,0.7); background: rgba(255,255,255,0.09); }
-.ap-inp::placeholder { color: #475569; }
-select.ap-inp { cursor: pointer; appearance: none; }
+.ap-inp:focus { border-color: rgba(59,130,246,.6); background: rgba(255,255,255,.1); }
+/* High-contrast selects — never gray-on-gray */
+.ap-inp option, select.ap-inp { color: #111; background: #fff; }
+select.ap-inp { color: #e2e8f0; background: rgba(30,30,50,0.97); }
+select.ap-inp option { color: #111; background: #fff; }
 
-/* Bullet list fields */
-.ap-bullets { display: flex; flex-direction: column; gap: 5px; margin-bottom: 4px; }
+.ap-hint { font-size: 11px; color: #64748b; line-height: 1.4; }
+.ap-empty { font-size: 12px; color: #475569; font-style: italic; padding: 8px 0; }
+
+/* Bullet rows */
+.ap-bullets { display: flex; flex-direction: column; gap: 4px; }
 .ap-bullet-row { display: flex; align-items: center; gap: 5px; }
-.ap-bullet-inp { flex: 1; min-width: 0; }
-.ap-rm-bullet {
-  flex-shrink: 0; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3);
-  color: #fca5a5; border-radius: 5px; width: 24px; height: 28px;
-  cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;
-  font-family: inherit;
+.ap-bullet-inp { flex: 1; }
+.ap-icon-btn {
+  background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.3);
+  color: #f87171; border-radius: 6px; padding: 3px 7px; cursor: pointer;
+  font-size: 14px; font-family: inherit; flex-shrink: 0; line-height: 1;
+  transition: background .15s;
 }
-.ap-rm-bullet:hover { background: rgba(239,68,68,0.3); }
+.ap-icon-btn:hover { background: rgba(239,68,68,.3); }
+.ap-icon-btn[class*="restore"] {
+  background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.3); color: #4ade80;
+}
+.ap-icon-btn[class*="restore"]:hover { background: rgba(34,197,94,.3); }
 
+/* Add buttons */
+.ap-add-btn {
+  width: 100%; margin-top: 6px; padding: 8px; border-radius: 8px;
+  border: 1px dashed rgba(59,130,246,.4); background: rgba(59,130,246,.08);
+  color: #93c5fd; font-size: 12px; font-weight: 500; cursor: pointer;
+  font-family: inherit; transition: all .15s;
+}
+.ap-add-btn:hover { background: rgba(59,130,246,.18); border-color: rgba(59,130,246,.7); }
 .ap-add-btn-sm {
-  width: 100%; padding: 7px; background: rgba(59,130,246,0.08);
-  border: 1px dashed rgba(59,130,246,0.35); border-radius: 7px;
-  color: #93c5fd; font-size: 12px; cursor: pointer; margin-top: 2px;
-  font-family: inherit; transition: background .15s;
+  padding: 5px 10px; border-radius: 7px; border: 1px dashed rgba(59,130,246,.35);
+  background: rgba(59,130,246,.07); color: #93c5fd; font-size: 11px; cursor: pointer;
+  font-family: inherit; margin-top: 4px; transition: all .15s;
 }
-.ap-add-btn-sm:hover { background: rgba(59,130,246,0.16); }
-
-.ap-img-replace-btn { text-align: center; }
-
-/* Nav destination layout */
-.ap-dest-scroll-wrap,
-.ap-dest-url-wrap { display: flex; flex-direction: column; gap: 5px; }
-
-/* Misc */
-.ap-empty, .ap-hint { font-size: 12px; color: #64748b; font-style: italic; padding: 3px 0; }
+.ap-add-btn-sm:hover { background: rgba(59,130,246,.18); }
 .ap-btn-full-primary {
-  width: 100%; padding: 11px; border-radius: 9px;
-  background: rgba(59,130,246,0.85); border: none; color: #fff;
-  font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s; font-family: inherit;
+  width: 100%; padding: 10px; border-radius: 9px; border: none;
+  background: rgba(59,130,246,.85); color: #fff; font-size: 13px;
+  font-weight: 600; cursor: pointer; font-family: inherit; transition: background .15s;
 }
-.ap-btn-full-primary:hover { background: rgba(37,99,235,0.95); }
+.ap-btn-full-primary:hover { background: rgba(37,99,235,.95); }
 
-/* ─── COLORS MODAL (movable) ─────────────────────────────────────── */
+/* Nav scroll-target select — readable contrast enforced */
+.ap-sel-contrast { color: #e2e8f0; background: rgba(30,30,50,0.97); }
+.ap-sel-contrast option { color: #111; background: #fff; }
+
+/* Dest wrappers */
+.ap-dest-scroll-wrap, .ap-dest-url-wrap { display: flex; flex-direction: column; gap: 4px; }
+
+/* ─── COLORS MODAL ───────────────────────────────────────────────── */
 #ap-colors-modal {
-  position: fixed; left: 50%; top: 60px; transform: translateX(-50%); z-index: 99998;
-  width: 360px; max-width: calc(100vw - 24px);
-  background: rgba(12,12,22,0.97);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 14px;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
-  font-family: system-ui, -apple-system, sans-serif;
-  overflow: hidden; backdrop-filter: blur(10px);
+  position: fixed; right: 350px; top: 80px; z-index: 99999;
+  width: 270px; background: #0f0f1a; border-radius: 14px; overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06);
+  font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #e2e8f0;
 }
 
-/* ─── PROMO MODAL (movable) ──────────────────────────────────────── */
+/* ─── PROMO MODAL ────────────────────────────────────────────────── */
 #ap-promo-modal {
-  position: fixed; right: 370px; top: 60px; z-index: 99998;
-  width: 380px; max-width: calc(100vw - 24px);
-  background: rgba(12,12,22,0.97);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 14px;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
-  font-family: system-ui, -apple-system, sans-serif;
-  backdrop-filter: blur(10px);
-  max-height: 82vh; overflow: hidden;
+  position: fixed; right: 350px; top: 80px; z-index: 99999;
+  width: 300px; max-height: 82vh;
+  background: #0f0f1a; border-radius: 14px; overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06);
+  font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #e2e8f0;
   display: flex; flex-direction: column;
 }
-#ap-promo-body { overflow-y: auto; flex: 1; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.12) transparent; }
+#ap-promo-body { overflow-y: auto; flex: 1; }
+#ap-promo-body::-webkit-scrollbar { width: 4px; }
+#ap-promo-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 2px; }
 
 /* Shared modal header */
 .ap-modal-hd {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 13px 16px; border-bottom: 1px solid rgba(255,255,255,0.08);
-  font-size: 13px; font-weight: 600; color: #e2e8f0;
-  cursor: grab;
+  padding: 12px 14px; background: rgba(255,255,255,.04);
+  border-bottom: 1px solid rgba(255,255,255,.07); cursor: grab; flex-shrink: 0;
 }
 .ap-modal-hd:active { cursor: grabbing; }
+.ap-modal-hd span { font-weight: 600; font-size: 13px; }
 .ap-modal-close {
-  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
-  color: #94a3b8; border-radius: 6px; width: 26px; height: 26px;
-  cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center;
-  transition: background .15s, color .15s;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1);
+  color: #94a3b8; cursor: pointer; border-radius: 6px; padding: 2px 8px;
+  font-size: 12px; font-family: inherit; transition: background .15s;
 }
-.ap-modal-close:hover { background: rgba(255,255,255,0.15); color: #e2e8f0; }
+.ap-modal-close:hover { background: rgba(255,255,255,.15); color: #fff; }
 
-#ap-swatches { padding: 10px 16px 4px; display: flex; flex-direction: column; gap: 8px; }
-.ap-swatch-row { display: flex; align-items: center; justify-content: space-between; }
-.ap-swatch-lbl { font-size: 12px; color: #94a3b8; font-weight: 500; }
-.ap-swatch-ctrl { display: flex; align-items: center; gap: 8px; }
-.ap-swatch-inp {
-  width: 38px; height: 30px; border: 2px solid rgba(255,255,255,0.15);
-  border-radius: 7px; cursor: pointer; padding: 2px; background: transparent;
-}
-.ap-swatch-inp::-webkit-color-swatch-wrapper { padding: 0; }
-.ap-swatch-inp::-webkit-color-swatch { border-radius: 4px; border: none; }
-.ap-swatch-hex { font-size: 11px; color: #64748b; font-family: monospace; min-width: 56px; }
+/* Color swatches */
+#ap-swatches { padding: 8px 14px 4px; display: flex; flex-direction: column; gap: 8px; }
+.ap-swatch-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ap-swatch-lbl { font-size: 11px; color: #94a3b8; flex: 1; }
+.ap-swatch-ctrl { display: flex; align-items: center; gap: 6px; }
+.ap-swatch-inp { width: 32px; height: 26px; border: none; border-radius: 5px; cursor: pointer; padding: 0; background: none; }
+.ap-swatch-hex { font-size: 10px; color: #64748b; font-family: monospace; width: 56px; }
 
-/* Promo modal internals */
-.ap-promo-block { border-bottom: 1px solid rgba(255,255,255,0.07); padding: 14px 16px; }
-.ap-toggle-row {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 13px; font-weight: 600; color: #cbd5e1; cursor: pointer;
-}
-.ap-toggle-row input[type="checkbox"] { accent-color: #3b82f6; width: 15px; height: 15px; cursor: pointer; }
-.ap-promo-sub { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
-.ap-promo-card-form {
-  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 9px; padding: 10px 12px 12px; margin-bottom: 8px;
-  display: flex; flex-direction: column; gap: 6px;
-}
-.ap-promo-card-form-title {
-  font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;
-  text-transform: uppercase; letter-spacing: .04em;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.ap-rm-card {
-  background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3);
-  color: #fca5a5; border-radius: 4px; width: 20px; height: 20px;
-  cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; font-family: inherit;
-}
-.ap-rm-card:hover { background: rgba(239,68,68,0.3); }
-.ap-add-btn {
-  width: 100%; padding: 8px; background: rgba(59,130,246,0.1);
-  border: 1px dashed rgba(59,130,246,0.4); border-radius: 8px;
-  color: #93c5fd; font-size: 13px; cursor: pointer; margin-top: 4px; font-family: inherit;
-}
-.ap-add-btn:hover { background: rgba(59,130,246,0.18); }
+/* Promo blocks */
+.ap-promo-block { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.ap-toggle-row { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; font-weight: 500; }
+.ap-toggle-row input[type="checkbox"] { accent-color: #3b82f6; width: 14px; height: 14px; }
+.ap-promo-sub { padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.ap-promo-card-form { background: rgba(255,255,255,.04); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 5px; border: 1px solid rgba(255,255,255,.06); }
+.ap-promo-card-form-title { font-size: 11px; font-weight: 600; color: #94a3b8; display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
 
-/* ─── PROMO BANNER (fixed, pushes page via JS-managed offsets) ───── */
-#ap-promo-banner {
-  position: fixed; left: 0; right: 0; top: 0; z-index: 100000;
-  background: linear-gradient(90deg, #5B2DA8 0%, #8B5FE6 100%);
-  color: #fff; text-align: center; padding: 10px 48px 10px 20px;
-  font-family: system-ui, -apple-system, sans-serif;
-  font-size: 14px;
-}
-#ap-promo-banner-inner {
-  display: flex; align-items: center; justify-content: center; gap: 16px;
-}
-#ap-promo-banner-text { font-weight: 500; }
-#ap-promo-banner-cta {
-  background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);
-  color: #fff; text-decoration: none; padding: 4px 14px;
-  border-radius: 20px; font-size: 13px; font-weight: 600; transition: background .15s;
-}
-#ap-promo-banner-cta:hover { background: rgba(255,255,255,0.3); }
-#ap-promo-banner-dismiss {
-  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
-  background: none; border: none; color: rgba(255,255,255,0.6); cursor: pointer;
-  font-size: 16px; line-height: 1; padding: 4px;
-}
-#ap-promo-banner-dismiss:hover { color: #fff; }
-
-/* ─── PROMO SECTION ──────────────────────────────────────────────── */
+/* ─── PROMO SECTION (rendered on page) ───────────────────────────── */
 #ap-promo-section {
-  padding: 60px 20px;
-  background: linear-gradient(135deg, #f5f0ff 0%, #ede5ff 100%);
-  font-family: system-ui, -apple-system, sans-serif;
+  padding: 60px 24px;
+  background: linear-gradient(135deg, #2d1260 0%, #1a0a3a 100%);
+  color: #fff;
 }
-.ap-promo-sec-inner { max-width: 1100px; margin: 0 auto; text-align: center; }
-#ap-promo-sec-heading { font-size: clamp(28px,4vw,44px); font-weight: 700; color: #1e1030; margin: 0 0 12px; }
-#ap-promo-sec-sub { font-size: 18px; color: #5a4b7a; margin: 0 0 36px; }
-.ap-promo-cards-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 20px; margin-top: 8px;
+.ap-promo-sec-inner { max-width: 1100px; margin: 0 auto; }
+#ap-promo-sec-heading {
+  font-size: clamp(26px, 4vw, 42px); font-weight: 700;
+  text-align: center; margin: 0 0 12px; color: #fff;
 }
-.ap-promo-card {
-  background: #fff; border-radius: 16px; overflow: hidden;
-  box-shadow: 0 4px 24px rgba(91,45,168,0.1); text-align: left;
+#ap-promo-sec-sub {
+  font-size: 16px; color: rgba(255,255,255,0.75);
+  text-align: center; margin: 0 0 36px;
 }
-.ap-promo-card-img { width: 100%; height: 160px; object-fit: cover; }
+.ap-promo-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+.ap-promo-card { background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.25); }
 .ap-promo-card-body { padding: 20px 22px 24px; }
 .ap-promo-card h3 { font-size: 18px; font-weight: 700; color: #1e1030; margin: 0 0 8px; }
 .ap-promo-card p  { font-size: 14px; color: #5a4b7a; margin: 0 0 16px; }
-.ap-promo-hero {
-  display: flex; gap: 40px; align-items: center; text-align: left;
-  flex-wrap: wrap; justify-content: center;
-}
+.ap-promo-hero { display: flex; gap: 40px; align-items: center; text-align: left; flex-wrap: wrap; justify-content: center; }
 .ap-promo-hero-img { width: 320px; max-width: 100%; border-radius: 14px; object-fit: cover; }
 .ap-promo-hero-body { flex: 1; min-width: 240px; }
-.ap-promo-hero h3 { font-size: clamp(24px,3vw,38px); font-weight: 700; color: #1e1030; margin: 0 0 12px; }
-.ap-promo-hero p  { font-size: 16px; color: #5a4b7a; margin: 0 0 20px; }
+.ap-promo-hero h3 { font-size: clamp(24px,3vw,38px); font-weight: 700; color: #fff; margin: 0 0 12px; }
+.ap-promo-hero p  { font-size: 16px; color: rgba(255,255,255,0.8); margin: 0 0 20px; }
 .ap-promo-cta {
   display: inline-block; padding: 11px 26px;
   background: linear-gradient(90deg, #5B2DA8, #8B5FE6);
@@ -468,7 +419,7 @@ select.ap-inp { cursor: pointer; appearance: none; }
 /* ─── PREVIEW BAR ────────────────────────────────────────────────── */
 #ap-preview-bar {
   position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
-  z-index: 99999; background: rgba(10,10,18,0.95); color: #94a3b8;
+  z-index: 100001; background: rgba(10,10,18,0.95); color: #94a3b8;
   padding: 10px 22px; border-radius: 40px;
   display: flex; align-items: center; gap: 16px;
   font-size: 13px; font-family: system-ui, sans-serif;
@@ -496,3 +447,6 @@ select.ap-inp { cursor: pointer; appearance: none; }
   border: 1px solid rgba(255,255,255,0.07);
 }
 #ap-toast.ap-toast-visible { opacity: 1; transform: translateY(0); }
+
+/* ─── EDIT MODE body — no hardcoded padding (JS manages it) ─────── */
+/* body.ap-edit-mode padding-top is set exclusively by JS via updatePageOffsets() */
