@@ -1,23 +1,23 @@
 /* ═══════════════════════════════════════════════════════════════════
    Admin Portal — Editor Chrome  (Path A · permanent design system)
 
-   Completely unbranded editor chrome — does NOT use client brand colors.
-   Selectors and class names are final; only the storage layer changes.
+   Completely unbranded. Does NOT use client brand colors.
 
    Stacking order (guide §5):
-   ┌─ Editor Toolbar  (position:fixed, z:100000, top:0)          ← ALWAYS absolute top
-   ├─ Promo Banner    (position:fixed, z:99997,  top:toolbarH)   ← below toolbar
+   ┌─ Editor Toolbar  (fixed, z:100000, top:0)          ← ALWAYS absolute top
+   ├─ Promo Banner    (fixed, z:99997,  top:toolbarH)   ← below toolbar
    ├─ Sticky Header   (top set via JS = toolbarH + bannerH)
-   └─ Page content    (body padding-top = toolbarH + bannerH, JS only)
+   └─ Page content    (body padding-top via JS only)
 
-   Outline visual language:
-   • Blue  dashed = in-place editable (direct typing on page)
+   Outline language (guide §3):
+   • Blue  dashed = in-place editable text (direct typing)
    • Yellow dashed = side-panel group (click opens panel)
-   • [data-editable] INSIDE a [data-editable-list] → NO blue outline (panel only)
-   • No outline on individual [data-editable-nav] child buttons (container gets yellow)
+   • [data-editable] or [data-editable-image] INSIDE [data-editable-list] → NO outline
+   • [data-key^="hero.cta-"] → yellow (opens panel)
+   • [data-editable-nav] child [data-key] items → no separate outline
 ═══════════════════════════════════════════════════════════════════ */
 
-/* ─── GEAR ───────────────────────────────────────────────────────── */
+/* ─── GEAR ─────────────────────────────────────────────────────── */
 #ap-gear {
   display: inline-flex;
   align-items: center;
@@ -35,7 +35,7 @@
 #ap-gear:hover { opacity: 0.9; transform: rotate(42deg); }
 @media (max-width: 767px) { #ap-gear { display: none !important; } }
 
-/* ─── LOGIN OVERLAY ──────────────────────────────────────────────── */
+/* ─── LOGIN OVERLAY ────────────────────────────────────────────── */
 #ap-login-overlay {
   position: fixed; inset: 0; z-index: 100002;
   background: rgba(5,3,15,0.65);
@@ -76,7 +76,7 @@
 }
 #ap-login-cancel:hover { color: #555; }
 
-/* ─── TOOLBAR (z:100000, top:0 — ALWAYS absolute top per guide) ──── */
+/* ─── TOOLBAR (z:100000, top:0) ────────────────────────────────── */
 #ap-toolbar {
   position: fixed; left: 0; right: 0; z-index: 100000; top: 0;
   background: rgba(10,10,18,0.97); color: #fff;
@@ -99,27 +99,22 @@
   font-family: inherit; white-space: nowrap; transition: background .15s, color .15s;
 }
 #ap-toolbar button:hover { background: rgba(255,255,255,.15); color: #fff; }
-#ap-toolbar .ap-btn-primary {
-  background: rgba(59,130,246,.85); color: #fff;
-  border-color: rgba(59,130,246,.5);
-}
+#ap-toolbar .ap-btn-primary { background: rgba(59,130,246,.85); color: #fff; border-color: rgba(59,130,246,.5); }
 #ap-toolbar .ap-btn-primary:hover { background: rgba(37,99,235,.92); }
 #ap-toolbar .ap-btn-secondary { background: rgba(255,255,255,.1); }
 #ap-toolbar .ap-btn-danger { background: rgba(185,28,28,.75); color: #fff; border-color: rgba(220,38,38,.4); }
 #ap-toolbar .ap-btn-danger:hover { background: rgba(185,28,28,.92); }
 
-/* ─── PROMO BANNER (z:99997, top set via JS below toolbar) ─────────
-   Closing/dismissing must remove space — no white gap.
-   JS sets banner.style.display='none' then calls updatePageOffsets().
-   The CSS must NOT add any static height or margin-top here.          */
+/* ─── PROMO BANNER (z:99997, top via JS) ──────────────────────────
+   Closing removes space — JS sets display:none then calls updatePageOffsets().
+   No static height or margin-top here.                               */
 #ap-promo-banner {
   position: fixed; left: 0; right: 0; z-index: 99997;
-  /* top is set by JS = toolbarH (when edit mode) or 0 (standalone) */
   background: linear-gradient(90deg, #1a0a3a 0%, #2d1260 50%, #1a0a3a 100%);
   color: #fff;
   font-family: system-ui, -apple-system, sans-serif;
   font-size: 14px;
-  display: none; /* hidden by default; JS shows/hides */
+  display: none;
 }
 #ap-promo-banner-inner {
   display: flex; align-items: center; justify-content: center;
@@ -140,9 +135,12 @@
 }
 #ap-promo-banner-dismiss:hover { color: #fff; }
 
-/* ─── OUTLINE SYSTEM ─────────────────────────────────────────────── */
+/* ─── OUTLINE SYSTEM ─────────────────────────────────────────────
 
-/* BLUE dashed = in-place editables that are NOT inside a list */
+   BLUE — in-place text editables NOT inside any list container
+   Hover: bolder dash + light tint (guide §3)
+   Active: controlled by JS (commitActive + handleClickOutside)        */
+
 .ap-edit-mode [data-editable][data-key]:not([data-editable-list] [data-editable]) {
   outline: 2px dashed rgba(59,130,246,0.5);
   outline-offset: 2px;
@@ -151,27 +149,25 @@
   transition: outline-color .15s, background-color .15s;
 }
 .ap-edit-mode [data-editable][data-key]:not([data-editable-list] [data-editable]):hover {
-  outline: 2px dashed rgba(59,130,246,0.9);
-  background-color: rgba(219,234,254,0.25);
+  outline: 3px dashed rgba(59,130,246,0.85);
+  background-color: rgba(219,234,254,0.22);
 }
 .ap-edit-mode [data-editable].ap-editing {
   outline: 2px solid #3b82f6 !important;
-  background-color: rgba(219,234,254,0.35) !important;
+  background-color: rgba(219,234,254,0.32) !important;
   border-radius: 3px;
 }
 
-/* Suppress blue on ANY [data-editable] inside a list — yellow group handles it */
-.ap-edit-mode [data-editable-list] [data-editable] {
+/* Suppress EVERYTHING inside list containers — panel handles all */
+.ap-edit-mode [data-editable-list] [data-editable],
+.ap-edit-mode [data-editable-list] [data-editable].ap-editing {
   outline: none !important;
   cursor: default !important;
   background-color: transparent !important;
 }
-.ap-edit-mode [data-editable-list] [data-editable].ap-editing {
-  outline: none !important;
-  background-color: transparent !important;
-}
 
-/* YELLOW dashed = side-panel groups */
+/* YELLOW — side-panel groups (lists, nav, contact, hero CTAs)
+   Hover: bolder dashed (guide §3 — no opacity wash)                  */
 .ap-edit-mode [data-editable-list],
 .ap-edit-mode [data-editable-contact],
 .ap-edit-mode [data-editable-nav] {
@@ -179,32 +175,51 @@
   outline-offset: 3px;
   border-radius: 4px;
   cursor: pointer;
-  transition: outline-color .15s, background-color .15s;
+  transition: outline-color .15s;
 }
 .ap-edit-mode [data-editable-list]:hover,
 .ap-edit-mode [data-editable-contact]:hover,
 .ap-edit-mode [data-editable-nav]:hover {
-  outline: 2px dashed rgba(202,167,71,0.9);
-  background-color: rgba(254,243,199,0.15);
+  outline: 3px dashed rgba(202,167,71,0.9);
 }
 
-/* Individual nav items: NO separate outline (the container gets yellow) */
+/* Hero CTA buttons — yellow panel-style (open nav panel on click) */
+.ap-edit-mode [data-key^="hero.cta-"] {
+  outline: 2px dashed rgba(202,167,71,0.6) !important;
+  outline-offset: 4px !important;
+  cursor: pointer !important;
+  transition: outline-color .15s;
+}
+.ap-edit-mode [data-key^="hero.cta-"]:hover {
+  outline: 3px dashed rgba(202,167,71,0.95) !important;
+}
+
+/* Nav child [data-key] items: NO separate outline (container gets yellow) */
 .ap-edit-mode [data-editable-nav] [data-key] {
   outline: none !important;
   cursor: pointer !important;
   background-color: transparent !important;
 }
 
-/* Editable image — camera cursor + subtle overlay */
-.ap-edit-mode [data-editable-image] {
+/* Images NOT in list containers — camera cursor + subtle blue outline */
+.ap-edit-mode [data-editable-image]:not([data-editable-list] *) {
   cursor: pointer;
-  position: relative;
   outline: 2px dashed rgba(59,130,246,0.5);
   outline-offset: 2px;
   border-radius: 4px;
-  transition: opacity .15s;
+  transition: opacity .15s, outline-color .15s;
 }
-.ap-edit-mode [data-editable-image]:hover { opacity: 0.85; }
+.ap-edit-mode [data-editable-image]:not([data-editable-list] *):hover {
+  outline: 3px dashed rgba(59,130,246,0.85);
+  opacity: 0.85;
+}
+
+/* Images INSIDE list containers — NO outline; edited via panel Replace button */
+.ap-edit-mode [data-editable-list] [data-editable-image] {
+  outline: none !important;
+  cursor: default !important;
+  opacity: 1 !important;
+}
 
 /* ─── SIDE PANEL ─────────────────────────────────────────────────── */
 #ap-panel {
@@ -221,7 +236,9 @@
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 14px; background: rgba(255,255,255,.04);
   border-bottom: 1px solid rgba(255,255,255,.07); flex-shrink: 0;
+  cursor: grab;
 }
+#ap-panel-header:active { cursor: grabbing; }
 #ap-panel-title { font-weight: 600; font-size: 13px; color: #e2e8f0; }
 #ap-panel-controls { display: flex; gap: 4px; }
 #ap-panel-controls button {
@@ -253,8 +270,11 @@
   border-bottom: 1px solid rgba(255,255,255,.06);
 }
 
-/* Accordion */
-.ap-acc { border-radius: 8px; overflow: hidden; margin-bottom: 6px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); }
+/* ─── ACCORDION (guide §5, §8: only one open at a time via JS) ── */
+.ap-acc {
+  border-radius: 8px; overflow: hidden; margin-bottom: 6px;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06);
+}
 .ap-acc-removed { opacity: 0.5; }
 .ap-acc-hd {
   display: flex; align-items: center; justify-content: space-between;
@@ -266,7 +286,7 @@
 .ap-acc[open] .ap-acc-hd { background: rgba(255,255,255,.05); border-bottom: 1px solid rgba(255,255,255,.06); }
 .ap-acc-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
 
-/* Form inputs */
+/* ─── FORM INPUTS ───────────────────────────────────────────────── */
 .ap-lbl {
   font-size: 10px; font-weight: 600; color: #64748b;
   text-transform: uppercase; letter-spacing: .05em; margin-bottom: -2px;
@@ -280,14 +300,13 @@
 }
 .ap-inp:focus { border-color: rgba(59,130,246,.6); background: rgba(255,255,255,.1); }
 /* High-contrast selects — never gray-on-gray */
-.ap-inp option, select.ap-inp { color: #111; background: #fff; }
 select.ap-inp { color: #e2e8f0; background: rgba(30,30,50,0.97); }
 select.ap-inp option { color: #111; background: #fff; }
 
 .ap-hint { font-size: 11px; color: #64748b; line-height: 1.4; }
 .ap-empty { font-size: 12px; color: #475569; font-style: italic; padding: 8px 0; }
 
-/* Bullet rows */
+/* ─── BULLET ROWS ───────────────────────────────────────────────── */
 .ap-bullets { display: flex; flex-direction: column; gap: 4px; }
 .ap-bullet-row { display: flex; align-items: center; gap: 5px; }
 .ap-bullet-inp { flex: 1; }
@@ -298,12 +317,12 @@ select.ap-inp option { color: #111; background: #fff; }
   transition: background .15s;
 }
 .ap-icon-btn:hover { background: rgba(239,68,68,.3); }
-.ap-icon-btn[class*="restore"] {
-  background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.3); color: #4ade80;
+.ap-restore-card-btn {
+  background: rgba(34,197,94,.15) !important; border-color: rgba(34,197,94,.3) !important; color: #4ade80 !important;
 }
-.ap-icon-btn[class*="restore"]:hover { background: rgba(34,197,94,.3); }
+.ap-restore-card-btn:hover { background: rgba(34,197,94,.3) !important; }
 
-/* Add buttons */
+/* ─── ADD BUTTONS ───────────────────────────────────────────────── */
 .ap-add-btn {
   width: 100%; margin-top: 6px; padding: 8px; border-radius: 8px;
   border: 1px dashed rgba(59,130,246,.4); background: rgba(59,130,246,.08);
@@ -324,14 +343,12 @@ select.ap-inp option { color: #111; background: #fff; }
 }
 .ap-btn-full-primary:hover { background: rgba(37,99,235,.95); }
 
-/* Nav scroll-target select — readable contrast enforced */
+/* Nav scroll-target select */
 .ap-sel-contrast { color: #e2e8f0; background: rgba(30,30,50,0.97); }
 .ap-sel-contrast option { color: #111; background: #fff; }
-
-/* Dest wrappers */
 .ap-dest-scroll-wrap, .ap-dest-url-wrap { display: flex; flex-direction: column; gap: 4px; }
 
-/* ─── COLORS MODAL ───────────────────────────────────────────────── */
+/* ─── COLORS MODAL ──────────────────────────────────────────────── */
 #ap-colors-modal {
   position: fixed; right: 350px; top: 80px; z-index: 99999;
   width: 270px; background: #0f0f1a; border-radius: 14px; overflow: hidden;
@@ -339,7 +356,23 @@ select.ap-inp option { color: #111; background: #fff; }
   font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #e2e8f0;
 }
 
-/* ─── PROMO MODAL ────────────────────────────────────────────────── */
+/* ─── SECTION BG MODAL ──────────────────────────────────────────── */
+#ap-section-bg-modal {
+  position: fixed; right: 350px; top: 80px; z-index: 99999;
+  width: 290px; max-height: 82vh;
+  background: #0f0f1a; border-radius: 14px; overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06);
+  font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #e2e8f0;
+  display: flex; flex-direction: column;
+}
+#ap-section-bg-body { overflow-y: auto; flex: 1; }
+#ap-section-bg-body::-webkit-scrollbar { width: 4px; }
+#ap-section-bg-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 2px; }
+.ap-sec-row { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.05); }
+.ap-sec-gradient-wrap,
+.ap-sec-solid-wrap { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+
+/* ─── PROMO MODAL ───────────────────────────────────────────────── */
 #ap-promo-modal {
   position: fixed; right: 350px; top: 80px; z-index: 99999;
   width: 300px; max-height: 82vh;
@@ -352,7 +385,7 @@ select.ap-inp option { color: #111; background: #fff; }
 #ap-promo-body::-webkit-scrollbar { width: 4px; }
 #ap-promo-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 2px; }
 
-/* Shared modal header */
+/* ─── SHARED MODAL HEADER ───────────────────────────────────────── */
 .ap-modal-hd {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 14px; background: rgba(255,255,255,.04);
@@ -367,15 +400,15 @@ select.ap-inp option { color: #111; background: #fff; }
 }
 .ap-modal-close:hover { background: rgba(255,255,255,.15); color: #fff; }
 
-/* Color swatches */
+/* ─── COLOR SWATCHES ────────────────────────────────────────────── */
 #ap-swatches { padding: 8px 14px 4px; display: flex; flex-direction: column; gap: 8px; }
 .ap-swatch-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.ap-swatch-lbl { font-size: 11px; color: #94a3b8; flex: 1; }
+.ap-swatch-lbl { font-size: 11px; color: #94a3b8; flex: 1; min-width: 0; }
 .ap-swatch-ctrl { display: flex; align-items: center; gap: 6px; }
 .ap-swatch-inp { width: 32px; height: 26px; border: none; border-radius: 5px; cursor: pointer; padding: 0; background: none; }
 .ap-swatch-hex { font-size: 10px; color: #64748b; font-family: monospace; width: 56px; }
 
-/* Promo blocks */
+/* ─── PROMO BLOCKS ──────────────────────────────────────────────── */
 .ap-promo-block { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.06); }
 .ap-toggle-row { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; font-weight: 500; }
 .ap-toggle-row input[type="checkbox"] { accent-color: #3b82f6; width: 14px; height: 14px; }
@@ -383,22 +416,16 @@ select.ap-inp option { color: #111; background: #fff; }
 .ap-promo-card-form { background: rgba(255,255,255,.04); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 5px; border: 1px solid rgba(255,255,255,.06); }
 .ap-promo-card-form-title { font-size: 11px; font-weight: 600; color: #94a3b8; display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
 
-/* ─── PROMO SECTION (rendered on page) ───────────────────────────── */
+/* ─── PROMO SECTION (rendered on page) ─────────────────────────── */
 #ap-promo-section {
   padding: 60px 24px;
   background: linear-gradient(135deg, #2d1260 0%, #1a0a3a 100%);
   color: #fff;
 }
 .ap-promo-sec-inner { max-width: 1100px; margin: 0 auto; }
-#ap-promo-sec-heading {
-  font-size: clamp(26px, 4vw, 42px); font-weight: 700;
-  text-align: center; margin: 0 0 12px; color: #fff;
-}
-#ap-promo-sec-sub {
-  font-size: 16px; color: rgba(255,255,255,0.75);
-  text-align: center; margin: 0 0 36px;
-}
-.ap-promo-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+#ap-promo-sec-heading { font-size: clamp(26px,4vw,42px); font-weight: 700; text-align: center; margin: 0 0 12px; color: #fff; }
+#ap-promo-sec-sub { font-size: 16px; color: rgba(255,255,255,0.75); text-align: center; margin: 0 0 36px; }
+.ap-promo-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 20px; }
 .ap-promo-card { background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.25); }
 .ap-promo-card-body { padding: 20px 22px 24px; }
 .ap-promo-card h3 { font-size: 18px; font-weight: 700; color: #1e1030; margin: 0 0 8px; }
@@ -416,7 +443,7 @@ select.ap-inp option { color: #111; background: #fff; }
 }
 .ap-promo-cta:hover { opacity: .88; }
 
-/* ─── PREVIEW BAR ────────────────────────────────────────────────── */
+/* ─── PREVIEW BAR ───────────────────────────────────────────────── */
 #ap-preview-bar {
   position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
   z-index: 100001; background: rgba(10,10,18,0.95); color: #94a3b8;
@@ -433,7 +460,7 @@ select.ap-inp option { color: #111; background: #fff; }
 }
 #ap-exit-preview:hover { background: rgba(37,99,235,0.92); }
 
-/* ─── TOAST ──────────────────────────────────────────────────────── */
+/* ─── TOAST ─────────────────────────────────────────────────────── */
 #ap-toast {
   position: fixed; bottom: 28px; right: 28px; z-index: 100001;
   background: rgba(10,10,18,0.96); color: #e2e8f0;
@@ -448,5 +475,4 @@ select.ap-inp option { color: #111; background: #fff; }
 }
 #ap-toast.ap-toast-visible { opacity: 1; transform: translateY(0); }
 
-/* ─── EDIT MODE body — no hardcoded padding (JS manages it) ─────── */
-/* body.ap-edit-mode padding-top is set exclusively by JS via updatePageOffsets() */
+/* body.ap-edit-mode padding-top is set exclusively by JS (updatePageOffsets) */

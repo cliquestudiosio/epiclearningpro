@@ -1,60 +1,58 @@
 /**
  * Epic Learning Pro — Admin Portal (Path A · localStorage)
- *
- * All data-key / data-editable* attributes are permanent.
- * Storage layer (localStorage) is temporary — replaced with real API later.
+ * Follows Admin-Portal-Replit-Implementation-Guide.md exactly.
  * PIN: 8421
  *
- * Stacking order (guide section 5):
- *   [Editor top bar]   ← ALWAYS absolute top (z:100000)
- *   [Promo Banner]     ← directly under toolbar when both on (z:99997)
- *   [Sticky Header]    ← top = toolbarH + bannerH
- *   [Page content]     ← body padding-top = toolbarH + bannerH
+ * Stacking order (guide §5):
+ *   [Editor top bar]   z:100000  top:0
+ *   [Promo Banner]     z:99997   top: toolbarH  (JS-set)
+ *   [Sticky Header]              top: toolbarH + bannerH
+ *   [Body content]     padding-top: toolbarH + bannerH (JS only)
  */
 (function () {
   'use strict';
 
-  /* ══════════════════════════════════════════════════════════════════
+  /* ══════════════════════════════════════════════════════════════
      CONFIG
-  ══════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════ */
   var script      = document.currentScript || document.querySelector('script[data-site-id]');
   var SITE_ID     = script ? script.getAttribute('data-site-id') : 'site_unknown';
-  var STORAGE_KEY = 'ap-content-'  + SITE_ID;
-  var ORIG_KEY    = 'ap-original-' + SITE_ID;
-  var ORIG_DATE   = 'ap-orig-date-'+ SITE_ID;
-  var COLOR_KEY   = 'ap-colors-'   + SITE_ID;
-  var PROMO_KEY   = 'ap-promo-'    + SITE_ID;
-  var IMG_KEY     = 'ap-img-'      + SITE_ID + '-';
+  var STORAGE_KEY = 'ap-content-'   + SITE_ID;
+  var ORIG_KEY    = 'ap-original-'  + SITE_ID;
+  var ORIG_DATE   = 'ap-orig-date-' + SITE_ID;
+  var COLOR_KEY   = 'ap-colors-'    + SITE_ID;
+  var PROMO_KEY   = 'ap-promo-'     + SITE_ID;
+  var IMG_KEY     = 'ap-img-'       + SITE_ID + '-';
+  var SECTION_BG_KEY = 'ap-section-bg-' + SITE_ID;
   var PIN         = '8421';
   var DELAY       = 420;
 
   var scriptSrc = (script && script.src) ? script.src : '';
   var BASE_PATH = scriptSrc ? scriptSrc.replace(/admin-portal\.js[^/]*$/, '') : '/';
 
-  /* ── State ─────────────────────────────────────────────────────── */
+  /* ── State ────────────────────────────────────────────────── */
   var S = {
-    editMode:       false,
-    previewMode:    false,
-    panelOpen:      false,
+    editMode: false,
+    previewMode: false,
+    panelOpen: false,
     panelMinimized: false,
-    panelSection:   'services',
-    activeEl:       null,
-    dirty:          false,
+    panelSection: 'services',
+    activeEl: null,
+    dirty: false,
   };
 
-  /* ── Brand Colors ──────────────────────────────────────────────── */
+  /* ── Brand Colors — guide §9: Primary/Secondary/Accent ONLY
+     No color names ("purple"/"teal"). No gradient stop tokens. ── */
   var BRAND_COLORS = [
-    { label: 'Primary (Purple)',    varName: '--brand-primary',    hslVar: '--primary',   hex: '#8B5FE6' },
-    { label: 'Secondary (Teal)',    varName: '--brand-secondary',  hslVar: '--secondary', hex: '#36A6DD' },
-    { label: 'Accent (Gold)',       varName: '--brand-accent',     hslVar: '--accent',    hex: '#CAA747' },
-    { label: 'Hero Gradient Start', varName: '--brand-hero-start', hslVar: null,          hex: '#5B2DA8' },
-    { label: 'Hero Gradient End',   varName: '--brand-hero-end',   hslVar: null,          hex: '#A472F0' },
-    { label: 'Dark Tint',           varName: '--brand-tint',       hslVar: null,          hex: '#7a52d4' },
+    { label: 'Primary',   varName: '--brand-primary',   hslVar: '--primary',   hex: '#8B5FE6' },
+    { label: 'Secondary', varName: '--brand-secondary', hslVar: '--secondary', hex: '#36A6DD' },
+    { label: 'Accent',    varName: '--brand-accent',    hslVar: '--accent',    hex: '#CAA747' },
+    { label: 'Dark Tint', varName: '--brand-tint',      hslVar: null,          hex: '#7a52d4' },
   ];
 
-  /* ══════════════════════════════════════════════════════════════════
+  /* ══════════════════════════════════════════════════════════════
      UTILITIES
-  ══════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════ */
   function hexToHSL(hex) {
     hex = hex.replace('#','');
     if (hex.length===3) hex=hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
@@ -88,7 +86,7 @@
       .filter(function(id){ return id && !id.startsWith('ap-'); });
   }
 
-  /* ── Find a card's direct-child wrapper inside its list container ── */
+  /* Find direct-child wrapper of a list container */
   function findCardWrapper(childEl){
     var listEl = childEl.closest('[data-editable-list]');
     if(!listEl) return null;
@@ -97,12 +95,50 @@
     return (node.parentElement === listEl) ? node : null;
   }
 
-  /* ══════════════════════════════════════════════════════════════════
+  function findCardWrapperByKey(dataKey){
+    var el = document.querySelector('[data-key="'+dataKey+'"]');
+    if(!el) return null;
+    return findCardWrapper(el);
+  }
+
+  function hideWrapperByKey(dataKey){
+    var w = findCardWrapperByKey(dataKey);
+    if(w){ w.style.display='none'; w.setAttribute('data-ap-removed','true'); S.dirty=true; }
+  }
+
+  function showWrapperByKey(dataKey){
+    var w = findCardWrapperByKey(dataKey);
+    if(w){ w.style.display=''; w.removeAttribute('data-ap-removed'); S.dirty=true; }
+  }
+
+  /* Derive smart label from link element (guide §4 footer links) */
+  function deriveContactLabel(el, key){
+    var rawText = (el.textContent||'').trim();
+    var href = el.getAttribute('href')||el.getAttribute('data-href')||'';
+    /* Derive from non-generic visible text first */
+    var generic = ['email','here','click','link','connect','visit','contact','phone','call'];
+    if(rawText && rawText.length<60 && generic.indexOf(rawText.toLowerCase())===-1){
+      return rawText.charAt(0).toUpperCase()+rawText.slice(1);
+    }
+    /* Derive from href */
+    if(href.startsWith('mailto:')) return 'Email address';
+    if(href.startsWith('tel:'))    return 'Phone number';
+    var hrefL = href.toLowerCase();
+    var platforms = {instagram:'Instagram',facebook:'Facebook',twitter:'Twitter',
+      linkedin:'LinkedIn',alignable:'Alignable',youtube:'YouTube',tiktok:'TikTok',
+      pinterest:'Pinterest',yelp:'Yelp',google:'Google'};
+    for(var p in platforms){ if(hrefL.indexOf(p)!==-1) return platforms[p]; }
+    /* Fallback: key suffix */
+    var rawKey = key.split('.').pop().replace(/-/g,' ');
+    return rawKey.charAt(0).toUpperCase()+rawKey.slice(1);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
      STORAGE HELPERS
-  ══════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════ */
   function readJSON(key){ try{ return JSON.parse(localStorage.getItem(key)||'null'); } catch(e){ return null; } }
 
-  /* Elements with data-editable that are NOT inside a list — these get in-place blue editing */
+  /* In-place blue editables: [data-editable] NOT inside a list */
   function simpleEditables(){
     return Array.from(document.querySelectorAll('[data-editable][data-key]')).filter(function(el){
       return !el.closest('[data-editable-list]');
@@ -121,10 +157,15 @@
       var v=snap[el.getAttribute('data-key')];
       if(v!==undefined) el.innerHTML=v;
     });
-    /* Structured list items (read-only — value comes from panel forms) */
+    /* Structured list items */
     document.querySelectorAll('[data-editable-list] [data-key]').forEach(function(el){
       var v=snap[el.getAttribute('data-key')];
       if(v!==undefined && typeof v==='string') el.textContent=v;
+    });
+    /* Hero CTAs */
+    document.querySelectorAll('[data-key^="hero.cta-"]').forEach(function(el){
+      var v=snap[el.getAttribute('data-key')];
+      if(v && typeof v==='object' && v.text!==undefined) el.textContent=v.text;
     });
     /* Contact */
     document.querySelectorAll('[data-editable-contact][data-key]').forEach(function(el){
@@ -136,12 +177,11 @@
     });
     /* Nav */
     document.querySelectorAll('[data-editable-nav] [data-key]').forEach(function(el){
-      var key=el.getAttribute('data-key');
-      var v=snap[key];
+      var v=snap[el.getAttribute('data-key')];
       if(v && typeof v==='object'){ if(v.text!==undefined) el.textContent=v.text; }
       else if(typeof v==='string') el.textContent=v;
     });
-    /* Hidden (removed) cards */
+    /* Hidden cards — generic: store any first data-key of removed wrapper */
     var hidden=snap['__ap_hidden__'];
     if(hidden && Array.isArray(hidden)){
       hidden.forEach(function(key){
@@ -172,13 +212,33 @@
     }
   }
 
+  /* Guide §10: section backgrounds separate from brand palette */
+  function applySectionBgs(bgs){
+    if(!bgs) return;
+    Object.keys(bgs).forEach(function(secId){
+      var bg=bgs[secId];
+      var secEl = secId==='footer' ? document.querySelector('footer') : document.getElementById(secId);
+      if(!secEl) return;
+      if(bg.type==='solid'){ secEl.style.background=bg.solid||''; }
+      else if(bg.type==='gradient'){
+        secEl.style.background='linear-gradient('+(bg.angle||135)+'deg,'+bg.start+' 0%,'+bg.end+' 100%)';
+      }
+    });
+  }
+
   function saveAll(){
     var snap=buildSnap();
     /* Nav */
     document.querySelectorAll('[data-editable-nav] [data-key]').forEach(function(el){
       var key=el.getAttribute('data-key');
       var ex=snap[key]||{}; if(typeof ex!=='object') ex={};
-      ex.text=el.textContent; snap[key]=ex;
+      ex.text=el.textContent.trim(); snap[key]=ex;
+    });
+    /* Hero CTAs */
+    document.querySelectorAll('[data-key^="hero.cta-"]').forEach(function(el){
+      var key=el.getAttribute('data-key');
+      var ex=snap[key]||{}; if(typeof ex!=='object') ex={};
+      ex.text=el.textContent.trim(); snap[key]=ex;
     });
     /* Contact */
     document.querySelectorAll('[data-editable-contact][data-key]').forEach(function(el){
@@ -187,15 +247,13 @@
       snap[key].text=(el.textContent||'').trim();
       snap[key].href=el.getAttribute('href')||el.getAttribute('data-href')||'';
     });
-    /* Hidden cards */
+    /* Hidden cards — generic: walk all removed wrappers, store their first data-key */
     var hidden=[];
-    document.querySelectorAll('[data-ap-removed="true"] [data-key]').forEach(function(el){
-      var k=el.getAttribute('data-key');
-      if(k.match(/\.card-\d+-title$/) && hidden.indexOf(k)===-1) hidden.push(k);
+    document.querySelectorAll('[data-ap-removed="true"]').forEach(function(w){
+      var keyEl=w.querySelector('[data-key]');
+      if(keyEl){ var k=keyEl.getAttribute('data-key'); if(hidden.indexOf(k)===-1) hidden.push(k); }
     });
-    if(hidden.length) snap['__ap_hidden__']=hidden;
-    else delete snap['__ap_hidden__'];
-
+    if(hidden.length) snap['__ap_hidden__']=hidden; else delete snap['__ap_hidden__'];
     /* List content */
     document.querySelectorAll('[data-editable-list] [data-key]').forEach(function(el){
       var w=findCardWrapper(el); if(w && w.getAttribute('data-ap-removed')==='true') return;
@@ -203,7 +261,8 @@
       if(!snap[key]) snap[key]=el.textContent;
     });
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(snap));
+
     /* Colors */
     var savedColors=readJSON(COLOR_KEY)||{};
     BRAND_COLORS.forEach(function(bc){
@@ -211,42 +270,31 @@
       if(v) savedColors[bc.varName]=v;
     });
     if(Object.keys(savedColors).length) localStorage.setItem(COLOR_KEY,JSON.stringify(savedColors));
+
     S.dirty=false;
   }
 
-  /* ══════════════════════════════════════════════════════════════════
-     PAGE OFFSETS  (guide section 5 — toolbar ALWAYS at absolute top)
-
-     [ Editor top bar ]   z:100000  top:0
-     [ Promo Banner   ]   z:99997   top: toolbarH  (when both on)
-     [ Sticky Header  ]             top: toolbarH + bannerH
-     [ Body content   ]   padding-top: toolbarH + bannerH
-  ══════════════════════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════════════
+     PAGE OFFSETS
+  ══════════════════════════════════════════════════════════════ */
   function updatePageOffsets(){
     var toolbar=document.getElementById('ap-toolbar');
     var banner=document.getElementById('ap-promo-banner');
     var hdr=document.querySelector('header');
 
-    var toolbarH=(toolbar && S.editMode) ? (toolbar.offsetHeight||44) : 0;
+    var toolbarH=(toolbar && S.editMode)?(toolbar.offsetHeight||44):0;
     var bannerVisible=banner && banner.style.display!=='none';
-    var bannerH=bannerVisible ? (banner.offsetHeight||40) : 0;
+    var bannerH=bannerVisible?(banner.offsetHeight||40):0;
 
-    /* Toolbar pinned at top */
     if(toolbar) toolbar.style.top='0';
-
-    /* Banner directly below toolbar */
     if(banner) banner.style.top=toolbarH+'px';
-
-    /* Sticky header below both */
     if(hdr) hdr.style.top=(toolbarH+bannerH)+'px';
-
-    /* Push body down */
     document.body.style.paddingTop=(toolbarH+bannerH)+'px';
   }
 
-  /* ══════════════════════════════════════════════════════════════════
+  /* ══════════════════════════════════════════════════════════════
      INIT
-  ══════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════ */
   function init(){
     injectStylesheet();
 
@@ -256,12 +304,15 @@
     var savedColors=readJSON(COLOR_KEY);
     if(savedColors) applyColors(savedColors);
 
+    var savedBgs=readJSON(SECTION_BG_KEY);
+    if(savedBgs) applySectionBgs(savedBgs);
+
     applyImages();
 
     if(!localStorage.getItem(ORIG_DATE)){
       setTimeout(function(){
-        localStorage.setItem(ORIG_KEY, JSON.stringify(buildSnap()));
-        localStorage.setItem(ORIG_DATE, String(Date.now()));
+        localStorage.setItem(ORIG_KEY,JSON.stringify(buildSnap()));
+        localStorage.setItem(ORIG_DATE,String(Date.now()));
       },300);
     }
 
@@ -280,9 +331,9 @@
     document.head.appendChild(link);
   }
 
-  /* ══════════════════════════════════════════════════════════════════
+  /* ══════════════════════════════════════════════════════════════
      GEAR
-  ══════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════ */
   function injectGear(){
     var anchor=document.getElementById('ap-gear-anchor');
     if(!anchor||document.getElementById('ap-gear')) return;
@@ -302,9 +353,9 @@
     btn.addEventListener('click',function(){ if(!S.editMode) showLogin(); else openPanel(); });
   }
 
-  /* ══════════════════════════════════════════════════════════════════
+  /* ══════════════════════════════════════════════════════════════
      LOGIN
-  ══════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════ */
   function showLogin(){
     if(document.getElementById('ap-login-overlay')) return;
     var ov=document.createElement('div'); ov.id='ap-login-overlay';
@@ -329,9 +380,9 @@
     ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
   }
 
-  /* ══════════════════════════════════════════════════════════════════
+  /* ══════════════════════════════════════════════════════════════
      EDIT MODE
-  ══════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════ */
   function enterEditMode(){
     S.editMode=true; S.dirty=false;
     document.body.classList.add('ap-edit-mode');
@@ -340,7 +391,16 @@
     document.querySelectorAll('[data-editable-list]').forEach(function(el){ el.addEventListener('click',handleListClick,true); });
     document.querySelectorAll('[data-editable-contact]').forEach(function(el){ el.addEventListener('click',handleContactClick,true); });
     document.querySelectorAll('[data-editable-nav]').forEach(function(el){ el.addEventListener('click',handleNavClick,true); });
-    document.querySelectorAll('[data-editable-image]').forEach(function(el){ el.addEventListener('click',handleImageClick,true); });
+    /* Images ONLY outside list containers — inside lists use panel Replace button */
+    document.querySelectorAll('[data-editable-image]').forEach(function(el){
+      if(!el.closest('[data-editable-list]')) el.addEventListener('click',handleImageClick,true);
+    });
+    /* Hero CTAs — open nav panel, not in-place */
+    document.querySelectorAll('[data-key^="hero.cta-"]').forEach(function(el){
+      el.addEventListener('click',handleHeroCtaClick,true);
+    });
+    /* Click-outside listener: clears blue active state (guide §3) */
+    document.addEventListener('click',handleClickOutside,true);
 
     showToolbar();
     updatePageOffsets();
@@ -349,10 +409,8 @@
 
   function exitEditMode(skipDirtyCheck){
     if(!skipDirtyCheck && S.dirty){
-      /* OK = Discard and exit | Cancel = Stay */
       var choice=confirm('You have unsaved changes.\n\nOK = Discard changes and exit\nCancel = Stay in editor');
       if(!choice) return;
-      /* Discard: reload last saved state */
       var saved=readJSON(STORAGE_KEY);
       if(saved) applySnap(saved);
     }
@@ -360,6 +418,7 @@
     commitActive();
     document.body.classList.remove('ap-edit-mode','ap-preview-mode');
     document.body.style.paddingTop='';
+    document.removeEventListener('click',handleClickOutside,true);
 
     simpleEditables().forEach(function(el){
       el.contentEditable='false';
@@ -369,9 +428,10 @@
     document.querySelectorAll('[data-editable-contact]').forEach(function(el){ el.removeEventListener('click',handleContactClick,true); });
     document.querySelectorAll('[data-editable-nav]').forEach(function(el){ el.removeEventListener('click',handleNavClick,true); });
     document.querySelectorAll('[data-editable-image]').forEach(function(el){ el.removeEventListener('click',handleImageClick,true); });
+    document.querySelectorAll('[data-key^="hero.cta-"]').forEach(function(el){ el.removeEventListener('click',handleHeroCtaClick,true); });
 
     var hdr=document.querySelector('header'); if(hdr) hdr.style.top='';
-    ['ap-toolbar','ap-panel','ap-preview-bar','ap-toast','ap-colors-modal','ap-promo-modal'].forEach(function(id){
+    ['ap-toolbar','ap-panel','ap-preview-bar','ap-toast','ap-colors-modal','ap-promo-modal','ap-section-bg-modal'].forEach(function(id){
       var el=document.getElementById(id); if(el) el.remove();
     });
     S.activeEl=null; S.panelOpen=false;
@@ -382,7 +442,15 @@
     if(S.activeEl){ S.activeEl.contentEditable='false'; S.activeEl.classList.remove('ap-editing'); S.activeEl=null; }
   }
 
-  /* ── Click handlers ─────────────────────────────────────────────*/
+  /* guide §3: click-outside clears active blue — never stuck */
+  function handleClickOutside(e){
+    if(!S.editMode||!S.activeEl) return;
+    if(S.activeEl.contains(e.target)||S.activeEl===e.target) return;
+    if(e.target.closest('#ap-toolbar,#ap-panel,#ap-colors-modal,#ap-promo-modal,#ap-section-bg-modal')) return;
+    commitActive();
+  }
+
+  /* ── Click handlers ─────────────────────────────────────────*/
   function handleInPlace(e){
     if(S.previewMode) return;
     e.stopPropagation();
@@ -398,7 +466,6 @@
 
   function handleListClick(e){
     if(S.previewMode) return;
-    /* Don't fire if user clicked a button inside (e.g. accordion trigger) */
     if(e.target.closest('button:not([data-editable-nav])')) return;
     e.stopPropagation();
     openPanel(e.currentTarget.getAttribute('data-editable-list'));
@@ -416,13 +483,14 @@
     openPanel('nav');
   }
 
+  /* guide §4 logo: in edit mode click → replace image, NOT scroll */
   function handleImageClick(e){
     if(S.previewMode) return;
     e.stopPropagation(); e.preventDefault();
     var imgEl=e.currentTarget; var key=imgEl.getAttribute('data-key');
     var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
     inp.addEventListener('change',function(){
-      var file=inp.files && inp.files[0]; if(!file) return;
+      var file=inp.files&&inp.files[0]; if(!file) return;
       var reader=new FileReader();
       reader.onload=function(ev){
         var dataUrl=ev.target.result;
@@ -435,9 +503,16 @@
     inp.click();
   }
 
-  /* ══════════════════════════════════════════════════════════════════
-     TOOLBAR  (z:100000, top:0 — always absolute top per guide)
-  ══════════════════════════════════════════════════════════════════ */
+  /* Hero CTAs open nav panel (not in-place) */
+  function handleHeroCtaClick(e){
+    if(S.previewMode) return;
+    e.stopPropagation(); e.preventDefault();
+    openPanel('nav');
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     TOOLBAR
+  ══════════════════════════════════════════════════════════════ */
   function showToolbar(){
     if(document.getElementById('ap-toolbar')) return;
     var origDate=localStorage.getItem(ORIG_DATE);
@@ -451,6 +526,7 @@
         '<div id="ap-toolbar-actions">'+
           '<button id="ap-btn-content" class="ap-btn-secondary">☰ Content</button>'+
           '<button id="ap-btn-colors">🎨 Colors</button>'+
+          '<button id="ap-btn-sections">🖼 Sections</button>'+
           '<button id="ap-btn-promo">✦ Promo</button>'+
           (canRestore?'<button id="ap-btn-restore" class="ap-btn-danger">↩ Restore</button>':'')+
           '<button id="ap-btn-preview">👁 Preview</button>'+
@@ -463,6 +539,7 @@
 
     document.getElementById('ap-btn-content').addEventListener('click',function(){ openPanel(); });
     document.getElementById('ap-btn-colors').addEventListener('click',openColorsModal);
+    document.getElementById('ap-btn-sections').addEventListener('click',openSectionBgModal);
     document.getElementById('ap-btn-promo').addEventListener('click',openPromoModal);
     document.getElementById('ap-btn-preview').addEventListener('click',enterPreview);
     document.getElementById('ap-btn-exit').addEventListener('click',function(){ exitEditMode(false); });
@@ -473,25 +550,25 @@
     if(rb){
       rb.addEventListener('click',function(){
         if(!confirm('Restore to original version? All saved edits will be cleared.')) return;
-        [STORAGE_KEY,COLOR_KEY,PROMO_KEY].forEach(function(k){ localStorage.removeItem(k); });
+        [STORAGE_KEY,COLOR_KEY,PROMO_KEY,SECTION_BG_KEY].forEach(function(k){ localStorage.removeItem(k); });
         for(var i=localStorage.length-1;i>=0;i--){
-          var k2=localStorage.key(i); if(k2 && k2.startsWith(IMG_KEY)) localStorage.removeItem(k2);
+          var k2=localStorage.key(i); if(k2&&k2.startsWith(IMG_KEY)) localStorage.removeItem(k2);
         }
         toast('Restored — reloading…'); setTimeout(function(){ location.reload(); },1200);
       });
     }
   }
 
-  /* ══════════════════════════════════════════════════════════════════
+  /* ══════════════════════════════════════════════════════════════
      SIDE PANEL
-  ══════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════ */
   var SECTIONS=[
     {id:'services',     label:'Services'},
     {id:'faqs',         label:'FAQs'},
     {id:'agitate',      label:'Pain Points'},
     {id:'testimonials', label:'Testimonials'},
     {id:'team',         label:'Team'},
-    {id:'nav',          label:'Nav Links'},
+    {id:'nav',          label:'Nav & CTAs'},
     {id:'contact',      label:'Contact'},
   ];
 
@@ -530,7 +607,7 @@
       else { body.style.display='none'; tabs.style.display='none'; btn.textContent='□'; S.panelMinimized=true; }
     });
     document.getElementById('ap-panel-close').addEventListener('click',function(){ panel.remove(); S.panelOpen=false; S.panelMinimized=false; });
-    makeDraggable(panel, document.getElementById('ap-panel-header'));
+    makeDraggable(panel,document.getElementById('ap-panel-header'));
     switchSection(S.panelSection);
   }
 
@@ -557,36 +634,50 @@
       default:             body.innerHTML='<p class="ap-empty">Section not found.</p>';
     }
     wireFormInputs(body);
+    wireAccordionOneOpen(body);
   }
 
-  /* ══════════════════════════════════════════════════════════════════
-     LIVE DOM ADD / REMOVE CARDS + BULLETS
-  ══════════════════════════════════════════════════════════════════ */
-
-  /* Remove a card from the live page by hiding its wrapper */
-  function removeCardFromPage(listType, cardIdx){
-    var titleEl=document.querySelector('[data-key="'+listType+'.card-'+cardIdx+'-title"]');
-    if(!titleEl) return;
-    var w=findCardWrapper(titleEl);
-    if(w){ w.style.display='none'; w.setAttribute('data-ap-removed','true'); }
-    S.dirty=true;
+  /* ══════════════════════════════════════════════════════════════
+     ACCORDION — ONE OPEN AT A TIME  (guide §5, §8, §10)
+  ══════════════════════════════════════════════════════════════ */
+  function wireAccordionOneOpen(container){
+    container.querySelectorAll('.ap-acc-hd').forEach(function(summary){
+      summary.addEventListener('click',function(e){
+        /* Don't intercept the remove/restore button click inside summary */
+        if(e.target!==summary && e.target.closest('button')) return;
+        var thisDetails=summary.closest('.ap-acc');
+        if(!thisDetails) return;
+        var parent=thisDetails.parentElement; if(!parent) return;
+        /* Close all other open siblings before this one toggles */
+        parent.querySelectorAll('.ap-acc[open]').forEach(function(d){
+          if(d!==thisDetails) d.removeAttribute('open');
+        });
+      });
+    });
   }
 
-  /* Add a new card to the live page by cloning card-0 and re-indexing */
+  /* ══════════════════════════════════════════════════════════════
+     LIVE DOM: ADD / REMOVE CARDS
+  ══════════════════════════════════════════════════════════════ */
+
+  /* Generic: services / agitate (key pattern: listType.card-N-title) */
+  function removeCardFromPage(listType,cardIdx){
+    hideWrapperByKey(listType+'.card-'+cardIdx+'-title');
+  }
+  function restoreCardFromPage(listType,cardIdx){
+    showWrapperByKey(listType+'.card-'+cardIdx+'-title');
+  }
+
   function addCardToPage(listType){
-    /* Find how many cards currently exist (including hidden) */
     var i=0;
     while(document.querySelector('[data-key="'+listType+'.card-'+i+'-title"]')) i++;
     var newIdx=i;
-
     var sourceEl=document.querySelector('[data-key="'+listType+'.card-0-title"]');
     if(!sourceEl) return newIdx;
     var sourceWrapper=findCardWrapper(sourceEl);
     if(!sourceWrapper) return newIdx;
-
     var listEl=sourceWrapper.parentElement;
     var clone=sourceWrapper.cloneNode(true);
-    /* Update all data-key attrs from card-0 to card-newIdx */
     clone.querySelectorAll('[data-key]').forEach(function(el){
       var oldKey=el.getAttribute('data-key');
       var newKey=oldKey.replace(listType+'.card-0',listType+'.card-'+newIdx);
@@ -596,47 +687,155 @@
     clone.removeAttribute('data-ap-removed');
     clone.style.display='';
     listEl.appendChild(clone);
-    /* Wire in-place handlers to new editable children */
-    clone.querySelectorAll('[data-editable]').forEach(function(el){
-      el.addEventListener('click',handleInPlace,true);
-    });
+    clone.querySelectorAll('[data-editable]').forEach(function(el){ el.addEventListener('click',handleInPlace,true); });
     S.dirty=true;
     return newIdx;
   }
 
-  /* Remove a bullet from the live page */
+  /* FAQ: key pattern faq.item-N-q */
+  function removeFAQItem(idx){ hideWrapperByKey('faq.item-'+idx+'-q'); }
+  function restoreFAQItem(idx){ showWrapperByKey('faq.item-'+idx+'-q'); }
+  function addFAQItem(){
+    var listEl=document.querySelector('[data-editable-list="faqs"]');
+    if(!listEl) return;
+    var i=0; while(document.querySelector('[data-key="faq.item-'+i+'-q"]')) i++;
+    var newIdx=i;
+    var srcEl=document.querySelector('[data-key="faq.item-0-q"]');
+    if(!srcEl) return newIdx;
+    var srcWrapper=findCardWrapper(srcEl);
+    if(!srcWrapper) return newIdx;
+    var clone=srcWrapper.cloneNode(true);
+    clone.removeAttribute('open');
+    clone.removeAttribute('data-ap-removed');
+    clone.style.display='';
+    clone.querySelectorAll('[data-key]').forEach(function(el){
+      var k=el.getAttribute('data-key');
+      el.setAttribute('data-key',k.replace(/item-\d+/,'item-'+newIdx));
+      el.textContent='';
+    });
+    var qEl=clone.querySelector('[data-key="faq.item-'+newIdx+'-q"]');
+    if(qEl) qEl.textContent='New question';
+    var aEl=clone.querySelector('[data-key="faq.item-'+newIdx+'-a"]');
+    if(aEl) aEl.textContent='New answer';
+    listEl.appendChild(clone);
+    S.dirty=true;
+    return newIdx;
+  }
+
+  /* Team: key pattern team.member-N-name */
+  function removeTeamMember(idx){ hideWrapperByKey('team.member-'+idx+'-name'); }
+  function restoreTeamMember(idx){ showWrapperByKey('team.member-'+idx+'-name'); }
+  function addTeamMember(){
+    var listEl=document.querySelector('[data-editable-list="team"]');
+    if(!listEl) return;
+    var i=0; while(document.querySelector('[data-key="team.member-'+i+'-name"]')) i++;
+    var newIdx=i;
+    var srcEl=document.querySelector('[data-key="team.member-0-name"]');
+    if(!srcEl) return newIdx;
+    var srcWrapper=findCardWrapper(srcEl);
+    if(!srcWrapper) return newIdx;
+    var clone=srcWrapper.cloneNode(true);
+    clone.removeAttribute('data-ap-removed'); clone.style.display='';
+    clone.querySelectorAll('[data-key]').forEach(function(el){
+      var k=el.getAttribute('data-key');
+      el.setAttribute('data-key',k.replace(/member-\d+/,'member-'+newIdx));
+    });
+    var nEl=clone.querySelector('[data-key="team.member-'+newIdx+'-name"]');
+    if(nEl) nEl.textContent='New Member';
+    var tEl=clone.querySelector('[data-key="team.member-'+newIdx+'-title"]');
+    if(tEl) tEl.textContent='Role';
+    listEl.appendChild(clone);
+    S.dirty=true;
+    return newIdx;
+  }
+
+  /* Testimonials: marquee has TWO copies — remove/add both halves */
+  function getMarqueeTrack(){
+    return document.querySelector('[data-editable-list="testimonials"] > div');
+  }
+  function removeTestimonial(idx){
+    var track=getMarqueeTrack(); if(!track) return;
+    var cards=Array.from(track.children);
+    var half=Math.round(cards.length/2);
+    var srcEl=document.querySelector('[data-key="testimonials.item-'+idx+'-text"]');
+    if(!srcEl) return;
+    var firstCard=findCardWrapper(srcEl);
+    if(!firstCard) return;
+    var cardPos=cards.indexOf(firstCard);
+    firstCard.style.display='none'; firstCard.setAttribute('data-ap-removed','true');
+    var dupCard=cards[cardPos+half];
+    if(dupCard){ dupCard.style.display='none'; dupCard.setAttribute('data-ap-removed','true'); }
+    S.dirty=true;
+  }
+  function restoreTestimonial(idx){
+    var track=getMarqueeTrack(); if(!track) return;
+    var cards=Array.from(track.children);
+    var half=Math.round(cards.length/2);
+    var srcEl=document.querySelector('[data-key="testimonials.item-'+idx+'-text"]');
+    if(!srcEl) return;
+    var firstCard=findCardWrapper(srcEl);
+    if(!firstCard) return;
+    var cardPos=cards.indexOf(firstCard);
+    firstCard.style.display=''; firstCard.removeAttribute('data-ap-removed');
+    var dupCard=cards[cardPos+half];
+    if(dupCard){ dupCard.style.display=''; dupCard.removeAttribute('data-ap-removed'); }
+    S.dirty=true;
+  }
+  function addTestimonial(){
+    var track=getMarqueeTrack(); if(!track) return;
+    var cards=Array.from(track.children);
+    var half=Math.round(cards.length/2);
+    var newIdx=half;
+    var src0=cards[0]; if(!src0) return;
+    /* New card for first half */
+    var newCard1=src0.cloneNode(true);
+    newCard1.style.display=''; newCard1.removeAttribute('data-ap-removed');
+    newCard1.querySelectorAll('[data-key]').forEach(function(el){
+      var k=el.getAttribute('data-key');
+      el.setAttribute('data-key',k.replace(/item-\d+/,'item-'+newIdx));
+      el.textContent='';
+    });
+    var tEl=newCard1.querySelector('[data-key="testimonials.item-'+newIdx+'-text"]');
+    if(tEl) tEl.textContent='New review';
+    var nEl=newCard1.querySelector('[data-key="testimonials.item-'+newIdx+'-name"]');
+    if(nEl) nEl.textContent='Reviewer Name';
+    track.insertBefore(newCard1,cards[half]);
+    /* Duplicate for second half (no data-keys) */
+    var newCard2=newCard1.cloneNode(true);
+    newCard2.querySelectorAll('[data-key]').forEach(function(el){ el.removeAttribute('data-key'); });
+    track.appendChild(newCard2);
+    S.dirty=true;
+    return newIdx;
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     LIVE DOM: BULLETS
+  ══════════════════════════════════════════════════════════════ */
   function removeBulletFromPage(key){
     var el=document.querySelector('[data-key="'+key+'"]');
     if(el){ var li=el.closest('li'); if(li) li.remove(); }
     S.dirty=true;
   }
-
-  /* Add a bullet to the live page */
-  function addBulletToPage(cardPrefix, newIdx){
-    /* Find the ul in the card */
+  function addBulletToPage(cardPrefix,newIdx){
     var anyBullet=document.querySelector('[data-key="'+cardPrefix+'-bullet-0"]');
     if(!anyBullet) return;
     var ul=anyBullet.closest('ul'); if(!ul) return;
-    /* Clone last li */
     var lastLi=ul.querySelector('li:last-child'); if(!lastLi) return;
     var clone=lastLi.cloneNode(true);
     var span=clone.querySelector('[data-key]');
     if(span){ span.setAttribute('data-key',cardPrefix+'-bullet-'+newIdx); span.textContent='New bullet'; }
-    /* Wire click handler */
-    if(span && span.hasAttribute('data-editable')) span.addEventListener('click',handleInPlace,true);
+    if(span&&span.hasAttribute('data-editable')) span.addEventListener('click',handleInPlace,true);
     ul.appendChild(clone);
     S.dirty=true;
   }
 
-  /* ── Bullet fields builder ──────────────────────────────────────*/
   function getBulletEls(cardPrefix){
     var all=[]; var i=0;
     while(true){
       var el=document.querySelector('[data-key="'+cardPrefix+'-bullet-'+i+'"]');
       if(!el) break;
-      /* skip if its card wrapper is removed */
       var w=findCardWrapper(el);
-      if(w && w.getAttribute('data-ap-removed')==='true'){ i++; continue; }
+      if(w&&w.getAttribute('data-ap-removed')==='true'){ i++; continue; }
       all.push({el:el,idx:i}); i++;
     }
     return all;
@@ -650,21 +849,23 @@
     bullets.forEach(function(b){
       html+='<div class="ap-bullet-row">'+
         '<input class="ap-inp ap-bullet-inp" type="text" data-tk="'+escH(cardPrefix+'-bullet-'+b.idx)+'" value="'+escH(b.el.textContent||'')+'" placeholder="Bullet item" />'+
-        '<button class="ap-rm-bullet" data-bullet-key="'+escH(cardPrefix+'-bullet-'+b.idx)+'" title="Remove">−</button>'+
+        '<button class="ap-rm-bullet ap-icon-btn" data-bullet-key="'+escH(cardPrefix+'-bullet-'+b.idx)+'" title="Remove">−</button>'+
       '</div>';
     });
     html+='</div><button class="ap-add-bullet ap-add-btn-sm" data-bullet-prefix="'+escH(cardPrefix)+'">+ Add bullet</button>';
     return html;
   }
 
-  /* ── Form: Services ─────────────────────────────────────────────*/
+  /* ══════════════════════════════════════════════════════════════
+     FORM BUILDERS
+  ══════════════════════════════════════════════════════════════ */
+
   function buildServicesForms(){
     var cards=[]; var i=0;
     while(true){
-      var el=document.querySelector('[data-key="services.card-'+i+'-title"]');
-      if(!el) break;
+      var el=document.querySelector('[data-key="services.card-'+i+'-title"]'); if(!el) break;
       var w=findCardWrapper(el);
-      var removed=w && w.getAttribute('data-ap-removed')==='true';
+      var removed=w&&w.getAttribute('data-ap-removed')==='true';
       cards.push({idx:i,removed:removed}); i++;
     }
     if(!cards.length) return '<p class="ap-empty">No service cards found in DOM.</p>';
@@ -681,7 +882,7 @@
             (c.removed?'<s>':'')+'Service '+(idx+1)+(c.removed?' (hidden)':'')+(c.removed?'</s>':'')+
             ' <button class="ap-'+(c.removed?'restore':'rm')+'-card-btn ap-icon-btn" data-list="services" data-idx="'+idx+'">'+(c.removed?'↩':'−')+'</button>'+
           '</summary>'+
-          (c.removed?'<div class="ap-acc-body"><p class="ap-hint">This card is hidden from the page. Click ↩ to restore it.</p></div>':
+          (c.removed?'<div class="ap-acc-body"><p class="ap-hint">Hidden. Click ↩ to restore.</p></div>':
           '<div class="ap-acc-body">'+
             fld('Title','text',prefix+'-title',titleEl?titleEl.textContent:'')+
             fld('Subtitle','text',prefix+'-subtitle',subtitleEl?subtitleEl.textContent:'')+
@@ -695,34 +896,41 @@
       '<button class="ap-add-card-btn ap-add-btn" data-list="services">+ Add Service Card</button>';
   }
 
-  /* ── Form: FAQs ─────────────────────────────────────────────────*/
   function buildFAQForms(){
     var items=[]; var i=0;
     while(true){
       var el=document.querySelector('[data-key="faq.item-'+i+'-q"]'); if(!el) break;
-      items.push(i); i++;
+      var w=findCardWrapper(el);
+      var removed=w&&w.getAttribute('data-ap-removed')==='true';
+      items.push({idx:i,removed:removed}); i++;
     }
     if(!items.length) return '<p class="ap-empty">No FAQ items found in DOM.</p>';
     return '<div class="ap-sec-title">FAQ Items</div>'+
-      items.map(function(idx){
+      items.map(function(c){
+        var idx=c.idx;
         var qEl=document.querySelector('[data-key="faq.item-'+idx+'-q"]');
         var aEl=document.querySelector('[data-key="faq.item-'+idx+'-a"]');
-        return '<details class="ap-acc">'+
-          '<summary class="ap-acc-hd">Question '+(idx+1)+'</summary>'+
+        return '<details class="ap-acc'+(c.removed?' ap-acc-removed':'')+'">'+
+          '<summary class="ap-acc-hd">'+
+            (c.removed?'<s>':'')+'Question '+(idx+1)+(c.removed?' (hidden)':'')+(c.removed?'</s>':'')+
+            ' <button class="ap-'+(c.removed?'restore':'rm')+'-card-btn ap-icon-btn" data-list="faqs" data-idx="'+idx+'">'+(c.removed?'↩':'−')+'</button>'+
+          '</summary>'+
+          (c.removed?'<div class="ap-acc-body"><p class="ap-hint">Hidden. Click ↩ to restore.</p></div>':
           '<div class="ap-acc-body">'+
-            fld('Question','text','faq.item-'+idx+'-q',qEl?qEl.textContent:'')+
-            fldTA('Answer','faq.item-'+idx+'-a',aEl?aEl.textContent:'')+
-          '</div></details>';
-      }).join('');
+            fld('Question','text','faq.item-'+idx+'-q',qEl?qEl.textContent.trim():'')+
+            fldTA('Answer','faq.item-'+idx+'-a',aEl?aEl.textContent.trim():'')+
+          '</div>')+
+        '</details>';
+      }).join('')+
+      '<button class="ap-add-faq-btn ap-add-btn">+ Add FAQ</button>';
   }
 
-  /* ── Form: Pain Points ──────────────────────────────────────────*/
   function buildAgitateForms(){
     var items=[]; var i=0;
     while(true){
       var el=document.querySelector('[data-key="agitate.card-'+i+'-title"]'); if(!el) break;
       var w=findCardWrapper(el);
-      var removed=w && w.getAttribute('data-ap-removed')==='true';
+      var removed=w&&w.getAttribute('data-ap-removed')==='true';
       items.push({idx:i,removed:removed}); i++;
     }
     if(!items.length) return '<p class="ap-empty">No pain point cards found in DOM.</p>';
@@ -736,131 +944,164 @@
             (c.removed?'<s>':'')+'Pain Point '+(idx+1)+(c.removed?' (hidden)':'')+(c.removed?'</s>':'')+
             ' <button class="ap-'+(c.removed?'restore':'rm')+'-card-btn ap-icon-btn" data-list="agitate" data-idx="'+idx+'">'+(c.removed?'↩':'−')+'</button>'+
           '</summary>'+
-          (c.removed?'<div class="ap-acc-body"><p class="ap-hint">Hidden from page. Click ↩ to restore.</p></div>':
+          (c.removed?'<div class="ap-acc-body"><p class="ap-hint">Hidden. Click ↩ to restore.</p></div>':
           '<div class="ap-acc-body">'+
             fld('Title','text','agitate.card-'+idx+'-title',titleEl?titleEl.textContent:'')+
             fldTA('Description','agitate.card-'+idx+'-desc',descEl?descEl.textContent:'')+
           '</div>')+
         '</details>';
       }).join('')+
-      '<button class="ap-add-card-btn ap-add-btn" data-list="agitate">+ Add Pain Point Card</button>';
+      '<button class="ap-add-card-btn ap-add-btn" data-list="agitate">+ Add Pain Point</button>';
   }
 
-  /* ── Form: Testimonials ─────────────────────────────────────────*/
   function buildTestimonialForms(){
     var textEls=Array.from(document.querySelectorAll('[data-key^="testimonials.item-"][data-key$="-text"]'));
     if(!textEls.length) return '<p class="ap-empty">No testimonial data-key attributes found.</p>';
-    /* Only first set (not the duplicated marquee items) */
     var seen={}; var uniq=textEls.filter(function(el){
       var k=el.getAttribute('data-key'); if(seen[k]) return false; seen[k]=true; return true;
     });
     return '<div class="ap-sec-title">Testimonial Cards</div>'+
-      '<p class="ap-hint" style="margin-bottom:8px">Testimonials display in a scrolling marquee.</p>'+
-      uniq.map(function(tel,i){
+      '<p class="ap-hint" style="margin-bottom:8px">Scrolling marquee. Text + name editable per card.</p>'+
+      uniq.map(function(tel){
         var tKey=tel.getAttribute('data-key');
-        var idxM=tKey.match(/item-(\d+)-/); var idx=idxM?idxM[1]:i;
+        var idxM=tKey.match(/item-(\d+)-/); var idx=idxM?parseInt(idxM[1],10):0;
         var nKey='testimonials.item-'+idx+'-name';
         var sKey='testimonials.item-'+idx+'-source';
         var nEl=document.querySelector('[data-key="'+nKey+'"]');
         var sEl=document.querySelector('[data-key="'+sKey+'"]');
-        return '<details class="ap-acc">'+
-          '<summary class="ap-acc-hd">Testimonial '+(parseInt(idx)+1)+'</summary>'+
+        var w=findCardWrapper(tel);
+        var removed=w&&w.getAttribute('data-ap-removed')==='true';
+        return '<details class="ap-acc'+(removed?' ap-acc-removed':'')+'">'+
+          '<summary class="ap-acc-hd">'+
+            (removed?'<s>':'')+'Testimonial '+(idx+1)+(removed?' (hidden)':'')+(removed?'</s>':'')+
+            ' <button class="ap-'+(removed?'restore':'rm')+'-card-btn ap-icon-btn" data-list="testimonials" data-idx="'+idx+'">'+(removed?'↩':'−')+'</button>'+
+          '</summary>'+
+          (removed?'<div class="ap-acc-body"><p class="ap-hint">Hidden. Click ↩ to restore.</p></div>':
           '<div class="ap-acc-body">'+
-            fld('Reviewer Name','text',nKey,nEl?(nEl.textContent||''):'')+ 
+            fld('Reviewer Name','text',nKey,nEl?(nEl.textContent||''):'')+
             fldTA('Review Text',tKey,tel.textContent||'')+
-            (sEl?fld('Source (e.g. Google, Alignable)','text',sKey,sEl.textContent||''):'<p class="ap-hint">Add data-key to source element to enable.</p>')+
-          '</div></details>';
-      }).join('');
+            (sEl?fld('Source (e.g. Alignable)','text',sKey,sEl.textContent||''):'<p class="ap-hint">Add data-key to source element to enable.</p>')+
+          '</div>')+
+        '</details>';
+      }).join('')+
+      '<button class="ap-add-testimonial-btn ap-add-btn">+ Add Testimonial</button>';
   }
 
-  /* ── Form: Team ─────────────────────────────────────────────────*/
   function buildTeamForms(){
     var nameEls=Array.from(document.querySelectorAll('[data-key^="team.member-"][data-key$="-name"]'));
     if(!nameEls.length) return '<p class="ap-empty">No team data-key attributes found.</p>';
     return '<div class="ap-sec-title">Team Members</div>'+
-      nameEls.map(function(nel,i){
+      nameEls.map(function(nel){
         var nKey=nel.getAttribute('data-key');
-        var mch=nKey.match(/member-(\d+)-/); var idx=mch?mch[1]:i;
+        var mch=nKey.match(/member-(\d+)-/); var idx=mch?parseInt(mch[1],10):0;
         var tKey='team.member-'+idx+'-title';
         var iKey='team.member-'+idx+'-photo';
         var tel=document.querySelector('[data-key="'+tKey+'"]');
         var imgEl=document.querySelector('[data-editable-image][data-key="'+iKey+'"]');
-        return '<details class="ap-acc">'+
-          '<summary class="ap-acc-hd">Member '+(parseInt(idx)+1)+'</summary>'+
+        var w=findCardWrapper(nel);
+        var removed=w&&w.getAttribute('data-ap-removed')==='true';
+        return '<details class="ap-acc'+(removed?' ap-acc-removed':'')+'">'+
+          '<summary class="ap-acc-hd">'+
+            (removed?'<s>':'')+'Member '+(idx+1)+(removed?' (hidden)':'')+(removed?'</s>':'')+
+            ' <button class="ap-'+(removed?'restore':'rm')+'-card-btn ap-icon-btn" data-list="team" data-idx="'+idx+'">'+(removed?'↩':'−')+'</button>'+
+          '</summary>'+
+          (removed?'<div class="ap-acc-body"><p class="ap-hint">Hidden. Click ↩ to restore.</p></div>':
           '<div class="ap-acc-body">'+
-            fld('Name','text',nKey,nel.textContent||'')+
-            fld('Title / Role','text',tKey,tel?tel.textContent:'')+
-            (imgEl
-              ? '<label class="ap-lbl">Photo</label><button class="ap-img-replace-btn ap-add-btn-sm" data-img-key="'+escH(iKey)+'">🖼 Replace Photo</button>'
-              : '<p class="ap-hint">Add data-editable-image to the team photo to enable replacement.</p>')+
-          '</div></details>';
-      }).join('');
+            fld('Name','text',nKey,nel.textContent.replace(/,.*$/,'').trim())+
+            fld('Title / Role','text',tKey,tel?tel.textContent.trim():'')+
+            (imgEl?'<label class="ap-lbl">Photo</label><button class="ap-img-replace-btn ap-add-btn-sm" data-img-key="'+escH(iKey)+'">🖼 Replace Photo</button>':'<p class="ap-hint">Add data-editable-image to enable photo.</p>')+
+          '</div>')+
+        '</details>';
+      }).join('')+
+      '<button class="ap-add-team-btn ap-add-btn">+ Add Team Member</button>';
   }
 
-  /* ── Form: Nav Links ────────────────────────────────────────────*/
+  /* ── Nav & CTAs (including Hero CTAs) ──────────────────────*/
   function buildNavForms(){
-    var btns=Array.from(document.querySelectorAll('[data-editable-nav] [data-key]'));
-    if(!btns.length) return '<p class="ap-empty">No nav links found. Add data-editable-nav to your &lt;nav&gt;.</p>';
+    var heroBtns=Array.from(document.querySelectorAll('[data-key^="hero.cta-"]'));
+    var navBtns=Array.from(document.querySelectorAll('[data-editable-nav] [data-key]'));
     var sections=getPageSectionIds();
     var snap=readJSON(STORAGE_KEY)||{};
-    return '<div class="ap-sec-title">Navigation Links</div>'+
-      '<p class="ap-hint" style="margin-bottom:8px">Edit display text and destination for each link. Scroll targets list the page sections.</p>'+
-      btns.map(function(btn,i){
+
+    var html='';
+
+    /* Hero CTAs */
+    if(heroBtns.length){
+      html+='<div class="ap-sec-title">Hero CTA Buttons</div>';
+      heroBtns.forEach(function(btn){
+        var key=btn.getAttribute('data-key');
+        var label=key==='hero.cta-primary'?'Hero CTA — Primary':'Hero CTA — Secondary';
+        var saved=snap[key]||{}; if(typeof saved!=='object') saved={};
+        var text=saved.text!==undefined?saved.text:btn.textContent.trim();
+        var destType=saved.destType||'scroll';
+        var destVal=saved.destVal||'';
+        html+=buildNavItemHTML(key,label,text,destType,destVal,sections);
+      });
+      html+='<div style="border-top:1px solid rgba(255,255,255,.06);margin:8px 0 10px"></div>';
+    }
+
+    /* Nav links */
+    html+='<div class="ap-sec-title">Navigation Links</div>';
+    html+='<p class="ap-hint" style="margin-bottom:8px">Display text and destination for each link.</p>';
+    if(!navBtns.length){
+      html+='<p class="ap-empty">No nav links found.</p>';
+    } else {
+      navBtns.forEach(function(btn,i){
         var key=btn.getAttribute('data-key');
         var isCta=key==='nav.cta';
-        var label=isCta ? 'Nav button (CTA)' : 'Nav link '+(i+1);
-        var saved=snap[key]; if(typeof saved!=='object') saved={};
+        var label=isCta?'Nav button (CTA)':'Nav link '+(i+1);
+        var saved=snap[key]||{}; if(typeof saved!=='object') saved={};
         var text=saved.text!==undefined?saved.text:(btn.textContent||'').trim();
         var destType=saved.destType||'scroll';
         var destVal=saved.destVal||'';
-        return '<details class="ap-acc">'+
-          '<summary class="ap-acc-hd">'+escH(label)+'</summary>'+
-          '<div class="ap-acc-body">'+
-            '<label class="ap-lbl">Display Text</label>'+
-            '<input class="ap-inp" type="text" data-nk="'+escH(key)+'" data-nf="text" value="'+escH(text)+'" />'+
-            '<label class="ap-lbl">Destination Type</label>'+
-            '<select class="ap-inp ap-dest-type" data-nk="'+escH(key)+'" data-nf="destType">'+
-              '<option value="scroll"'+(destType==='scroll'?' selected':'')+'>Scroll to section</option>'+
-              '<option value="url"'+(destType==='url'?' selected':'')+'>External URL</option>'+
-            '</select>'+
-            '<div class="ap-dest-scroll-wrap"'+(destType!=='scroll'?' style="display:none"':'')+'>'+
-              '<label class="ap-lbl">Scroll target (section)</label>'+
-              '<select class="ap-inp ap-sel-contrast" data-nk="'+escH(key)+'" data-nf="destVal">'+
-                '<option value="">— choose section —</option>'+
-                sections.map(function(sid){
-                  return '<option value="'+escH(sid)+'"'+(destVal===sid?' selected':'')+'>'+escH('#'+sid)+'</option>';
-                }).join('')+
-              '</select>'+
-            '</div>'+
-            '<div class="ap-dest-url-wrap"'+(destType!=='url'?' style="display:none"':'')+'>'+
-              '<label class="ap-lbl">URL</label>'+
-              '<input class="ap-inp" type="text" data-nk="'+escH(key)+'" data-nf="destValUrl" placeholder="https://..." value="'+escH(destType==='url'?destVal:'')+'" />'+
-            '</div>'+
-          '</div></details>';
-      }).join('');
+        html+=buildNavItemHTML(key,label,text,destType,destVal,sections);
+      });
+    }
+    return html;
   }
 
-  /* ── Form: Contact ──────────────────────────────────────────────*/
+  function buildNavItemHTML(key,label,text,destType,destVal,sections){
+    return '<details class="ap-acc">'+
+      '<summary class="ap-acc-hd">'+escH(label)+'</summary>'+
+      '<div class="ap-acc-body">'+
+        '<label class="ap-lbl">Display Text</label>'+
+        '<input class="ap-inp" type="text" data-nk="'+escH(key)+'" data-nf="text" value="'+escH(text)+'" />'+
+        '<label class="ap-lbl">Destination Type</label>'+
+        '<select class="ap-inp ap-dest-type" data-nk="'+escH(key)+'" data-nf="destType">'+
+          '<option value="scroll"'+(destType==='scroll'?' selected':'')+'>Scroll to section</option>'+
+          '<option value="url"'+(destType==='url'?' selected':'')+'>External URL</option>'+
+        '</select>'+
+        '<div class="ap-dest-scroll-wrap"'+(destType!=='scroll'?' style="display:none"':'')+'>'+
+          '<label class="ap-lbl">Scroll target</label>'+
+          '<select class="ap-inp ap-sel-contrast" data-nk="'+escH(key)+'" data-nf="destVal">'+
+            '<option value="">— choose section —</option>'+
+            sections.map(function(sid){ return '<option value="'+escH(sid)+'"'+(destVal===sid?' selected':'')+'>'+escH('#'+sid)+'</option>'; }).join('')+
+          '</select>'+
+        '</div>'+
+        '<div class="ap-dest-url-wrap"'+(destType!=='url'?' style="display:none"':'')+'>'+
+          '<label class="ap-lbl">URL</label>'+
+          '<input class="ap-inp" type="text" data-nk="'+escH(key)+'" data-nf="destValUrl" placeholder="https://..." value="'+escH(destType==='url'?destVal:'')+'" />'+
+        '</div>'+
+      '</div></details>';
+  }
+
   function buildContactForms(){
     var els=Array.from(document.querySelectorAll('[data-editable-contact][data-key]'));
     if(!els.length) return '<p class="ap-empty">No contact elements found.</p>';
-    /* Deduplicate by key (same email key appears in contact section + footer) */
     var seen={}; var uniq=els.filter(function(el){
       var k=el.getAttribute('data-key'); if(seen[k]) return false; seen[k]=true; return true;
     });
     var snap=readJSON(STORAGE_KEY)||{};
     return '<div class="ap-sec-title">Contact & Social Links</div>'+
-      '<p class="ap-hint" style="margin-bottom:8px">Edit both the visible text and the link destination for each item.</p>'+
+      '<p class="ap-hint" style="margin-bottom:8px">Edit visible text and destination for each item.</p>'+
       uniq.map(function(el){
         var key=el.getAttribute('data-key');
-        var rawLabel=key.split('.').pop().replace(/-/g,' ');
-        /* Friendly label */
-        var label={'email':'Email address','phone':'Phone number','alignable':'Alignable link','alignable-footer':'Alignable (footer)'}[rawLabel]||rawLabel;
+        var label=deriveContactLabel(el,key);
         var saved=snap[key]||{};
         var text=saved.text!==undefined?saved.text:(el.textContent||'').trim();
         var href=saved.href!==undefined?saved.href:(el.getAttribute('href')||el.getAttribute('data-href')||'');
         return '<details class="ap-acc">'+
-          '<summary class="ap-acc-hd">'+escH(label.charAt(0).toUpperCase()+label.slice(1))+'</summary>'+
+          '<summary class="ap-acc-hd">'+escH(label)+'</summary>'+
           '<div class="ap-acc-body">'+
             '<label class="ap-lbl">Display Text</label>'+
             '<input class="ap-inp" type="text" data-tk="'+escH(key)+'" data-tf="text" value="'+escH(text)+'" />'+
@@ -870,7 +1111,7 @@
       }).join('');
   }
 
-  /* ── Shared field helpers ───────────────────────────────────────*/
+  /* ── Shared field helpers ────────────────────────────────── */
   function fld(label,type,key,val){
     return '<label class="ap-lbl">'+escH(label)+'</label>'+
       '<input class="ap-inp" type="'+type+'" data-tk="'+escH(key)+'" value="'+escH(val)+'" />';
@@ -880,11 +1121,11 @@
       '<textarea class="ap-inp" data-tk="'+escH(key)+'" rows="3">'+escH(val)+'</textarea>';
   }
 
-  /* ══════════════════════════════════════════════════════════════════
-     WIRE FORM INPUTS → live DOM + panel feedback
-  ══════════════════════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════════════
+     WIRE FORM INPUTS
+  ══════════════════════════════════════════════════════════════ */
   function wireFormInputs(container){
-    /* Standard data-tk inputs → update matching DOM elements live */
+    /* Standard data-tk inputs → update DOM live */
     container.querySelectorAll('[data-tk]').forEach(function(inp){
       inp.addEventListener('input',function(){
         var key=inp.getAttribute('data-tk');
@@ -892,36 +1133,39 @@
         var val=inp.value;
         S.dirty=true;
         if(tf){
-          /* Contact: update text or href */
-          var snap=readJSON(STORAGE_KEY)||{};
-          if(!snap[key]||typeof snap[key]!=='object') snap[key]={};
-          snap[key][tf]=val;
-          localStorage.setItem(STORAGE_KEY,JSON.stringify(snap));
+          var snap2=readJSON(STORAGE_KEY)||{};
+          if(!snap2[key]||typeof snap2[key]!=='object') snap2[key]={};
+          snap2[key][tf]=val;
+          localStorage.setItem(STORAGE_KEY,JSON.stringify(snap2));
           document.querySelectorAll('[data-editable-contact][data-key="'+key+'"]').forEach(function(el){
             if(tf==='text') el.textContent=val;
-            if(tf==='href' && el.tagName==='A') el.href=val;
+            if(tf==='href'&&el.tagName==='A') el.href=val;
           });
         } else {
-          /* Simple key → update all matching elements on page */
           document.querySelectorAll('[data-key="'+key+'"]').forEach(function(el){ el.textContent=val; });
         }
       });
     });
 
-    /* Nav data-nk inputs */
+    /* Nav / Hero CTA data-nk inputs */
     container.querySelectorAll('[data-nk]').forEach(function(inp){
       inp.addEventListener('input',function(){
         var key=inp.getAttribute('data-nk');
         var nf=inp.getAttribute('data-nf');
         var val=inp.value;
         S.dirty=true;
-        var snap=readJSON(STORAGE_KEY)||{};
-        if(!snap[key]||typeof snap[key]!=='object') snap[key]={};
-        if(nf==='destValUrl') snap[key].destVal=val;
-        else snap[key][nf]=val;
-        localStorage.setItem(STORAGE_KEY,JSON.stringify(snap));
+        var snap3=readJSON(STORAGE_KEY)||{};
+        if(!snap3[key]||typeof snap3[key]!=='object') snap3[key]={};
+        if(nf==='destValUrl') snap3[key].destVal=val;
+        else snap3[key][nf]=val;
+        localStorage.setItem(STORAGE_KEY,JSON.stringify(snap3));
         if(nf==='text'){
+          /* Update nav items */
           document.querySelectorAll('[data-editable-nav] [data-key="'+key+'"]').forEach(function(el){ el.textContent=val; });
+          /* Update hero CTA spans (preserve icon children) */
+          document.querySelectorAll('[data-key="'+key+'"]').forEach(function(el){
+            if(!el.closest('[data-editable-nav]')) el.textContent=val;
+          });
         }
       });
     });
@@ -937,13 +1181,16 @@
       });
     });
 
-    /* Remove card buttons */
+    /* Remove card buttons — dispatches by list type */
     container.querySelectorAll('.ap-rm-card-btn').forEach(function(btn){
       btn.addEventListener('click',function(e){
         e.preventDefault(); e.stopPropagation();
         var list=btn.getAttribute('data-list');
         var idx=parseInt(btn.getAttribute('data-idx'),10);
-        removeCardFromPage(list,idx);
+        if(list==='team') removeTeamMember(idx);
+        else if(list==='faqs') removeFAQItem(idx);
+        else if(list==='testimonials') removeTestimonial(idx);
+        else removeCardFromPage(list,idx);
         switchSection(S.panelSection);
       });
     });
@@ -954,14 +1201,16 @@
         e.preventDefault(); e.stopPropagation();
         var list=btn.getAttribute('data-list');
         var idx=parseInt(btn.getAttribute('data-idx'),10);
-        var titleEl=document.querySelector('[data-key="'+list+'.card-'+idx+'-title"]');
-        if(titleEl){ var w=findCardWrapper(titleEl); if(w){ w.style.display=''; w.removeAttribute('data-ap-removed'); } }
+        if(list==='team') restoreTeamMember(idx);
+        else if(list==='faqs') restoreFAQItem(idx);
+        else if(list==='testimonials') restoreTestimonial(idx);
+        else restoreCardFromPage(list,idx);
         S.dirty=true;
         switchSection(S.panelSection);
       });
     });
 
-    /* Add card buttons */
+    /* Add card buttons (services / agitate) */
     container.querySelectorAll('.ap-add-card-btn').forEach(function(btn){
       btn.addEventListener('click',function(e){
         e.preventDefault();
@@ -971,7 +1220,22 @@
       });
     });
 
-    /* Remove bullet — also removes from live page */
+    /* Add FAQ */
+    container.querySelectorAll('.ap-add-faq-btn').forEach(function(btn){
+      btn.addEventListener('click',function(e){ e.preventDefault(); addFAQItem(); switchSection(S.panelSection); });
+    });
+
+    /* Add team member */
+    container.querySelectorAll('.ap-add-team-btn').forEach(function(btn){
+      btn.addEventListener('click',function(e){ e.preventDefault(); addTeamMember(); switchSection(S.panelSection); });
+    });
+
+    /* Add testimonial */
+    container.querySelectorAll('.ap-add-testimonial-btn').forEach(function(btn){
+      btn.addEventListener('click',function(e){ e.preventDefault(); addTestimonial(); switchSection(S.panelSection); });
+    });
+
+    /* Remove bullet */
     container.querySelectorAll('.ap-rm-bullet').forEach(function(btn){
       btn.addEventListener('click',function(e){
         e.preventDefault();
@@ -981,7 +1245,7 @@
       });
     });
 
-    /* Add bullet — also adds to live page */
+    /* Add bullet */
     container.querySelectorAll('.ap-add-bullet').forEach(function(btn){
       btn.addEventListener('click',function(e){
         e.preventDefault();
@@ -989,9 +1253,7 @@
         var bulletsWrap=container.querySelector('[data-bullet-prefix="'+prefix+'"]'); if(!bulletsWrap) return;
         var rows=bulletsWrap.querySelectorAll('.ap-bullet-row');
         var nextIdx=rows.length;
-        /* Add to live page first */
         addBulletToPage(prefix,nextIdx);
-        /* Add form row */
         var row=document.createElement('div'); row.className='ap-bullet-row';
         var newKey=prefix+'-bullet-'+nextIdx;
         row.innerHTML=
@@ -1015,7 +1277,7 @@
         var imgKey=btn.getAttribute('data-img-key');
         var inp2=document.createElement('input'); inp2.type='file'; inp2.accept='image/*';
         inp2.addEventListener('change',function(){
-          var file=inp2.files && inp2.files[0]; if(!file) return;
+          var file=inp2.files&&inp2.files[0]; if(!file) return;
           var reader=new FileReader();
           reader.onload=function(ev){
             var dataUrl=ev.target.result;
@@ -1030,7 +1292,9 @@
     });
   }
 
-  /* ── Draggable panels ─────────────────────────────────────────── */
+  /* ══════════════════════════════════════════════════════════════
+     DRAGGABLE PANELS
+  ══════════════════════════════════════════════════════════════ */
   function makeDraggable(panel,handle){
     var dr={on:false,sx:0,sy:0,pr:0,pt:0};
     handle.style.cursor='grab';
@@ -1053,9 +1317,9 @@
     });
   }
 
-  /* ══════════════════════════════════════════════════════════════════
-     BRAND COLORS MODAL
-  ══════════════════════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════════════
+     BRAND COLORS MODAL  (guide §9: Primary/Secondary/Accent ONLY)
+  ══════════════════════════════════════════════════════════════ */
   function openColorsModal(){
     var ex=document.getElementById('ap-colors-modal'); if(ex){ ex.remove(); return; }
     var saved=readJSON(COLOR_KEY)||{};
@@ -1066,7 +1330,8 @@
         '<span>🎨 Brand Colors</span>'+
         '<button class="ap-modal-close" id="ap-colors-close">✕</button>'+
       '</div>'+
-      '<p class="ap-hint" style="padding:8px 16px 0;font-size:11px">Swatches update the page live. Save to keep.</p>'+
+      '<p class="ap-hint" style="padding:8px 16px 0;font-size:11px">Updates all uses of each color site-wide. Save to keep.</p>'+
+      '<p class="ap-hint" style="padding:2px 16px 0;font-size:10px">Section backgrounds are edited separately via 🖼 Sections.</p>'+
       '<div id="ap-swatches">'+
         BRAND_COLORS.map(function(bc){
           var cur=saved[bc.varName]||root.style.getPropertyValue(bc.varName).trim()||getComputedStyle(root).getPropertyValue(bc.varName).trim()||bc.hex;
@@ -1090,7 +1355,7 @@
         var varName=inp.getAttribute('data-var'); var hex=inp.value;
         root.style.setProperty(varName,hex);
         var bc=BRAND_COLORS.find(function(c){ return c.varName===varName; });
-        if(bc && bc.hslVar) root.style.setProperty(bc.hslVar,hexToHSL(hex));
+        if(bc&&bc.hslVar) root.style.setProperty(bc.hslVar,hexToHSL(hex));
         var row=inp.closest('.ap-swatch-row');
         if(row){ var hl=row.querySelector('.ap-swatch-hex'); if(hl) hl.textContent=hex; }
         S.dirty=true;
@@ -1104,9 +1369,126 @@
     });
   }
 
-  /* ══════════════════════════════════════════════════════════════════
+  /* ══════════════════════════════════════════════════════════════
+     SECTION BACKGROUNDS MODAL  (guide §4, §10 — separate from brand)
+  ══════════════════════════════════════════════════════════════ */
+  function openSectionBgModal(){
+    var ex=document.getElementById('ap-section-bg-modal'); if(ex){ ex.remove(); return; }
+    var saved=readJSON(SECTION_BG_KEY)||{};
+    /* Auto-detect sections and footer */
+    var secEls=Array.from(document.querySelectorAll('section[id]')).concat(
+      document.querySelector('footer') ? [document.querySelector('footer')] : []
+    );
+    var modal=document.createElement('div'); modal.id='ap-section-bg-modal';
+    var rows=secEls.map(function(el){
+      var secId=el.id||'footer';
+      var label=el.tagName==='FOOTER'?'Footer':secId.replace(/-/g,' ').replace(/\b\w/g,function(c){ return c.toUpperCase(); });
+      var bg=saved[secId]||{};
+      var type=bg.type||'gradient';
+      var startColor=bg.start||'#5B2DA8';
+      var endColor=bg.end||'#A472F0';
+      var angle=bg.angle||135;
+      var solid=bg.solid||'#ffffff';
+      return '<div class="ap-promo-block ap-sec-row" data-sec-id="'+escH(secId)+'">'+
+        '<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">'+escH(label)+'</div>'+
+        '<select class="ap-inp ap-sec-bg-type" style="margin-bottom:5px">'+
+          '<option value="gradient"'+(type==='gradient'?' selected':'')+'>Gradient</option>'+
+          '<option value="solid"'+(type==='solid'?' selected':'')+'>Solid color</option>'+
+        '</select>'+
+        '<div class="ap-sec-gradient-wrap"'+(type==='solid'?' style="display:none"':'')+'>'+
+          '<div class="ap-swatch-row"><label class="ap-swatch-lbl">Start</label><div class="ap-swatch-ctrl"><input type="color" class="ap-swatch-inp ap-sec-start" value="'+escH(startColor)+'" /><span class="ap-swatch-hex">'+escH(startColor)+'</span></div></div>'+
+          '<div class="ap-swatch-row"><label class="ap-swatch-lbl">End</label><div class="ap-swatch-ctrl"><input type="color" class="ap-swatch-inp ap-sec-end" value="'+escH(endColor)+'" /><span class="ap-swatch-hex">'+escH(endColor)+'</span></div></div>'+
+          '<div class="ap-swatch-row" style="margin-top:2px"><label class="ap-swatch-lbl">Angle</label>'+
+          '<input type="number" class="ap-inp" min="0" max="360" value="'+escH(String(angle))+'" style="width:64px;padding:4px 7px" /></div>'+
+        '</div>'+
+        '<div class="ap-sec-solid-wrap"'+(type==='gradient'?' style="display:none"':'')+'>'+
+          '<div class="ap-swatch-row"><label class="ap-swatch-lbl">Color</label><div class="ap-swatch-ctrl"><input type="color" class="ap-swatch-inp ap-sec-solid" value="'+escH(solid)+'" /><span class="ap-swatch-hex">'+escH(solid)+'</span></div></div>'+
+        '</div>'+
+        '<button class="ap-add-btn-sm ap-sec-apply-btn" style="margin-top:5px;width:100%">↻ Preview</button>'+
+      '</div>';
+    }).join('');
+    modal.innerHTML=
+      '<div class="ap-modal-hd" id="ap-section-bg-hd">'+
+        '<span>🖼 Section Backgrounds</span>'+
+        '<button class="ap-modal-close" id="ap-section-bg-close">✕</button>'+
+      '</div>'+
+      '<div id="ap-section-bg-body">'+
+        '<p class="ap-hint" style="padding:8px 16px 4px;font-size:11px">Per-section background colors. Not in brand palette.</p>'+
+        rows+
+        '<div style="padding:10px 16px 14px"><button id="ap-sec-bg-save" class="ap-btn-full-primary">Save Section Backgrounds</button></div>'+
+      '</div>';
+    document.body.appendChild(modal);
+    makeDraggable(modal,document.getElementById('ap-section-bg-hd'));
+    document.getElementById('ap-section-bg-close').addEventListener('click',function(){ modal.remove(); });
+
+    /* Wire type selectors */
+    modal.querySelectorAll('.ap-sec-bg-type').forEach(function(sel){
+      sel.addEventListener('change',function(){
+        var row=sel.closest('.ap-sec-row');
+        row.querySelector('.ap-sec-gradient-wrap').style.display=sel.value==='gradient'?'':'none';
+        row.querySelector('.ap-sec-solid-wrap').style.display=sel.value==='solid'?'':'none';
+      });
+    });
+
+    /* Wire color pickers → update hex label */
+    modal.querySelectorAll('.ap-swatch-inp').forEach(function(inp){
+      inp.addEventListener('input',function(){
+        var row=inp.closest('.ap-swatch-row');
+        if(row){ var hl=row.querySelector('.ap-swatch-hex'); if(hl) hl.textContent=inp.value; }
+        S.dirty=true;
+      });
+    });
+
+    /* Preview (apply) buttons */
+    modal.querySelectorAll('.ap-sec-apply-btn').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        var row=btn.closest('.ap-sec-row');
+        applySectionBgRow(row);
+      });
+    });
+
+    /* Save all */
+    document.getElementById('ap-sec-bg-save').addEventListener('click',function(){
+      var toSave={};
+      modal.querySelectorAll('.ap-sec-row').forEach(function(row){
+        var secId=row.getAttribute('data-sec-id');
+        var type=row.querySelector('.ap-sec-bg-type').value;
+        if(type==='solid'){
+          toSave[secId]={ type:'solid', solid:row.querySelector('.ap-sec-solid').value };
+        } else {
+          var angleInp=row.querySelector('input[type="number"]');
+          toSave[secId]={ type:'gradient',
+            start:row.querySelector('.ap-sec-start').value,
+            end:row.querySelector('.ap-sec-end').value,
+            angle:angleInp?parseInt(angleInp.value,10)||135:135 };
+        }
+        applySectionBgRow(row);
+      });
+      localStorage.setItem(SECTION_BG_KEY,JSON.stringify(toSave));
+      S.dirty=false; toast('Section backgrounds saved'); modal.remove();
+    });
+  }
+
+  function applySectionBgRow(row){
+    var secId=row.getAttribute('data-sec-id');
+    var secEl=secId==='footer'?document.querySelector('footer'):document.getElementById(secId);
+    if(!secEl) return;
+    var type=row.querySelector('.ap-sec-bg-type').value;
+    if(type==='solid'){
+      secEl.style.background=row.querySelector('.ap-sec-solid').value;
+    } else {
+      var s=row.querySelector('.ap-sec-start').value;
+      var e=row.querySelector('.ap-sec-end').value;
+      var angleInp=row.querySelector('input[type="number"]');
+      var a=angleInp?parseInt(angleInp.value,10)||135:135;
+      secEl.style.background='linear-gradient('+a+'deg,'+s+' 0%,'+e+' 100%)';
+    }
+    S.dirty=true;
+  }
+
+  /* ══════════════════════════════════════════════════════════════
      PROMO ELEMENTS
-  ══════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════ */
   var PROMO_STARTER={
     bannerActive:false,
     bannerText:'✦ Summer Learning Series — Register by July 31 for early-bird pricing.',
@@ -1123,7 +1505,6 @@
   };
 
   function injectPromoElements(){
-    /* ── Banner: below toolbar (JS positions via updatePageOffsets) ── */
     if(!document.getElementById('ap-promo-banner')){
       var banner=document.createElement('div'); banner.id='ap-promo-banner';
       banner.setAttribute('data-promo-banner',''); banner.setAttribute('data-key','promo.banner');
@@ -1137,12 +1518,10 @@
       document.body.prepend(banner);
       banner.querySelector('#ap-promo-banner-dismiss').addEventListener('click',function(){
         banner.style.display='none';
-        /* Immediately collapse space — no white gap */
-        updatePageOffsets();
+        updatePageOffsets(); /* guide §3: no white gap when off */
       });
     }
 
-    /* ── Promo Section: always directly under #hero ── */
     if(!document.getElementById('ap-promo-section')){
       var sec=document.createElement('section'); sec.id='ap-promo-section';
       sec.setAttribute('data-promo-section',''); sec.setAttribute('data-key','promo.section');
@@ -1154,7 +1533,7 @@
           '<div id="ap-promo-cards"></div>'+
         '</div>';
       var hero=document.getElementById('hero');
-      if(hero && hero.parentNode) hero.parentNode.insertBefore(sec,hero.nextSibling);
+      if(hero&&hero.parentNode) hero.parentNode.insertBefore(sec,hero.nextSibling);
       else document.body.appendChild(sec);
     }
   }
@@ -1164,21 +1543,21 @@
     var sec=document.getElementById('ap-promo-section');
     if(banner){
       banner.style.display=d.bannerActive?'':'none';
-      var bt=banner.querySelector('#ap-promo-banner-text'); if(bt && d.bannerText) bt.textContent=d.bannerText;
-      var bl=banner.querySelector('#ap-promo-banner-cta'); if(bl && d.bannerLink) bl.href=d.bannerLink;
+      var bt=banner.querySelector('#ap-promo-banner-text'); if(bt&&d.bannerText) bt.textContent=d.bannerText;
+      var bl=banner.querySelector('#ap-promo-banner-cta'); if(bl&&d.bannerLink) bl.href=d.bannerLink;
     }
     if(sec){
       sec.style.display=d.sectionActive?'':'none';
-      var sh=sec.querySelector('#ap-promo-sec-heading'); if(sh && d.sectionHeading) sh.textContent=d.sectionHeading;
-      var ss=sec.querySelector('#ap-promo-sec-sub'); if(ss && d.sectionSub) ss.textContent=d.sectionSub;
+      var sh=sec.querySelector('#ap-promo-sec-heading'); if(sh&&d.sectionHeading) sh.textContent=d.sectionHeading;
+      var ss=sec.querySelector('#ap-promo-sec-sub'); if(ss&&d.sectionSub) ss.textContent=d.sectionSub;
       var cards=sec.querySelector('#ap-promo-cards');
-      if(cards && d.cards && d.cards.length) renderPromoCards(cards,d.cards,d.layout||'cards');
+      if(cards&&d.cards&&d.cards.length) renderPromoCards(cards,d.cards,d.layout||'cards');
     }
     updatePageOffsets();
   }
 
   function renderPromoCards(container,cards,layout){
-    if(layout==='hero' && cards[0]){
+    if(layout==='hero'&&cards[0]){
       var c=cards[0];
       container.className='ap-promo-hero';
       container.innerHTML=
@@ -1202,7 +1581,6 @@
     }
   }
 
-  /* ── Promo Editor Modal ──────────────────────────────────────────*/
   function openPromoModal(){
     var ex=document.getElementById('ap-promo-modal'); if(ex){ ex.remove(); return; }
     var hasSaved=!!localStorage.getItem(PROMO_KEY);
@@ -1327,9 +1705,9 @@
     });
   }
 
-  /* ══════════════════════════════════════════════════════════════════
+  /* ══════════════════════════════════════════════════════════════
      PREVIEW
-  ══════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════ */
   function enterPreview(){
     S.previewMode=true; commitActive();
     document.body.classList.add('ap-preview-mode');
@@ -1337,10 +1715,10 @@
     var panel=document.getElementById('ap-panel'); if(panel) panel.style.display='none';
     var cm=document.getElementById('ap-colors-modal'); if(cm) cm.style.display='none';
     var pm=document.getElementById('ap-promo-modal'); if(pm) pm.style.display='none';
+    var sbm=document.getElementById('ap-section-bg-modal'); if(sbm) sbm.style.display='none';
 
-    /* Recalculate offsets without toolbar */
     var banner=document.getElementById('ap-promo-banner');
-    var bannerH=(banner && banner.style.display!=='none')?(banner.offsetHeight||40):0;
+    var bannerH=(banner&&banner.style.display!=='none')?(banner.offsetHeight||40):0;
     var hdr=document.querySelector('header');
     document.body.style.paddingTop=bannerH+'px';
     if(hdr) hdr.style.top=bannerH+'px';
@@ -1355,13 +1733,14 @@
       var p2=document.getElementById('ap-panel'); if(p2) p2.style.display='';
       var cm2=document.getElementById('ap-colors-modal'); if(cm2) cm2.style.display='';
       var pm2=document.getElementById('ap-promo-modal'); if(pm2) pm2.style.display='';
+      var sbm2=document.getElementById('ap-section-bg-modal'); if(sbm2) sbm2.style.display='';
       updatePageOffsets();
     });
   }
 
-  /* ══════════════════════════════════════════════════════════════════
+  /* ══════════════════════════════════════════════════════════════
      BOOT
-  ══════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════ */
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded',function(){ setTimeout(init,DELAY); });
   } else {

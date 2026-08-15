@@ -314,12 +314,12 @@ export default function Home() {
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <button onClick={() => scrollTo('contact')} data-testid="button-hero-cta"
                   className="inline-flex items-center justify-center gap-2 rounded-full w-full sm:w-auto text-base h-14 px-8 bg-white text-primary font-semibold shadow-lg hover:bg-white/90 hover:scale-105 transition-all group">
-                  Start Your Journey
+                  <span data-key="hero.cta-primary">Start Your Journey</span>
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </button>
                 <button onClick={() => scrollTo('services')} data-testid="button-hero-explore"
                   className="inline-flex items-center justify-center rounded-full w-full sm:w-auto text-base h-14 px-8 bg-white/15 text-white font-semibold border border-white/30 hover:bg-white/25 transition-all">
-                  Explore Services
+                  <span data-key="hero.cta-secondary">Explore Services</span>
                 </button>
               </div>
             </FadeIn>
@@ -328,7 +328,7 @@ export default function Home() {
       </section>
 
       {/* ── Problem / Agitate — soft lavender tint ── */}
-      <section className="py-16 md:py-28" style={{ background: 'linear-gradient(135deg, #ede8ff 0%, #e4daff 100%)' }}>
+      <section id="agitate" className="py-16 md:py-28" style={{ background: 'linear-gradient(135deg, #ede8ff 0%, #e4daff 100%)' }}>
         <div className="container mx-auto px-4 sm:px-6">
           <FadeIn>
             <div className="text-center max-w-3xl mx-auto mb-12 md:mb-16">
