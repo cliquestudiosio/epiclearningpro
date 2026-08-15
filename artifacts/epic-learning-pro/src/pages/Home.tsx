@@ -393,7 +393,7 @@ export default function Home() {
                   <ul className="space-y-2">
                     {["Business Training Programs", "Leadership & HR Coaching", "GED Coaching", "Homeschooling & Special Needs"].map((item, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <CheckCircle2 className="h-4 w-4 text-secondary mt-0.5 shrink-0" /><span data-editable="" data-key={`services.card-0-bullet-${i}`}>{item}</span>
+                        <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" /><span data-editable="" data-key={`services.card-0-bullet-${i}`}>{item}</span>
                       </li>
                     ))}
                   </ul>
@@ -420,7 +420,7 @@ export default function Home() {
                   <ul className="space-y-2">
                     {["Intuitive Leadership Series", "Confident Communication", "Mental Health for Professionals", "Workflow & Organization"].map((item, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" /><span data-editable="" data-key={`services.card-1-bullet-${i}`}>{item}</span>
+                        <CheckCircle2 className="h-4 w-4 text-secondary mt-0.5 shrink-0" /><span data-editable="" data-key={`services.card-1-bullet-${i}`}>{item}</span>
                       </li>
                     ))}
                   </ul>
