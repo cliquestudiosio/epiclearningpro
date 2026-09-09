@@ -86,6 +86,13 @@ const painPoints = [
   { title: "Unfocused Goals",             desc: "Without clear direction or an accountability partner, ambitions stay dreams instead of achievements.", icon: Target },
 ];
 
+function formatPhoneNumber(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 10);
+  if (digits.length < 4) return digits;
+  if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)} ${digits.slice(6)}`;
+}
+
 export default function Home() {
   useSparks();
 
@@ -177,7 +184,7 @@ export default function Home() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setForm(p => ({ ...p, [name]: value }));
+    setForm(p => ({ ...p, [name]: name === 'phone' ? formatPhoneNumber(value) : value }));
     if (formErrors[name]) setFormErrors(p => { const n = { ...p }; delete n[name]; return n; });
     if (submitError) setSubmitError('');
   };
@@ -727,7 +734,7 @@ export default function Home() {
                           <label className="block text-white text-sm font-medium mb-1.5" htmlFor="phone">
                             <span className="inline-flex items-center gap-1"><Phone size={13} /> Phone</span>
                           </label>
-                          <input id="phone" name="phone" type="tel" autoComplete="tel" placeholder="(555) 000-0000"
+                          <input id="phone" name="phone" type="tel" autoComplete="tel" placeholder="(555) 000 0000"
                             value={form.phone} onChange={handleChange} data-testid="input-contact-phone" className={inputBase} />
                         </div>
                       </div>
