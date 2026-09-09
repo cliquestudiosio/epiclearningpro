@@ -10,7 +10,7 @@
   },
   "vars": {
     "CONTACT_TO_EMAIL": "portfolio@cliquestudios.io",
-    "CONTACT_FROM_EMAIL": "portfolio@cliquestudios.io"
+    "CONTACT_FROM_EMAIL": "contact@portfolio.cliquestudios.io"
   },
   "routes": [
     {
