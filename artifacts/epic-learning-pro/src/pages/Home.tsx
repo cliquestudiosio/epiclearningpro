@@ -90,7 +90,7 @@ function formatPhoneNumber(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 10);
   if (digits.length < 4) return digits;
   if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)} ${digits.slice(6)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
 export default function Home() {
@@ -734,7 +734,7 @@ export default function Home() {
                           <label className="block text-white text-sm font-medium mb-1.5" htmlFor="phone">
                             <span className="inline-flex items-center gap-1"><Phone size={13} /> Phone</span>
                           </label>
-                          <input id="phone" name="phone" type="tel" autoComplete="tel" placeholder="(555) 000 0000"
+                          <input id="phone" name="phone" type="tel" autoComplete="tel" placeholder="(555) 000-0000"
                             value={form.phone} onChange={handleChange} data-testid="input-contact-phone" className={inputBase} />
                         </div>
                       </div>
