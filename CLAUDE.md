@@ -50,29 +50,35 @@ The admin portal's content persists to a **separate, dedicated Supabase project 
 
 ### Schema (`Client_Facing_Tools` project)
 
-- `sites` — one row per client site (`slug`, `name`, `subscription_active`). `slug` is the same value as the site's public **Site ID** (the `data-site-id` attribute on the `admin-portal.js` script tag — for this site, `site_elp_7f3a9c2e`). `subscription_active` is a manual flag for now (not yet wired to Stripe); intent per product spec is "script silently does nothing if subscription inactive" — **not yet enforced client-side, still to do.**
+- `sites` — one row per client site (`slug`, `name`, `url`, `subscription_active`). `slug` is the same value as the site's public **Site ID** (the `data-site-id` attribute on the `admin-portal.js` script tag — for this site, `site_elp_7f3a9c2e`). `url` is the site's actual public URL (informational — not read by `admin-portal.js`, kept so the row is self-describing for future tooling). `subscription_active` is a manual flag for now (not yet wired to Stripe); intent per product spec is "script silently does nothing if subscription inactive" — **not yet enforced client-side, still to do.**
 - `site_content` — one row per site, keyed by `site_slug`: `content`, `hex_colors`, `promo`, `section_bg` (jsonb, mirroring the old localStorage snapshots 1:1), `images` (jsonb map of `data-key -> Storage public URL`), `updated_at`, `updated_by`.
-- `profiles` — one row per editor login (auto-created by an `on_auth_user_created` trigger), `is_disabled` flag.
-- `site_editors` — `(user_id, site_slug)` grants: an account can only write to sites it's explicitly assigned to. This is what stops one client's login from ever touching another client's content, even though they share one Supabase project/auth pool.
-- Storage bucket `site-images`, public read; upload/replace restricted to editors assigned to that image's site (RLS checks the first path segment against `site_editors`, so images live at `site-images/<site_slug>/...`).
+- `profiles` — one row per login (auto-created by an `on_auth_user_created` trigger): `username` (display name, for attribution — who made a given change), `is_disabled`, `is_staff`.
+- `site_editors` — `(user_id, site_slug)` grants: a **client** account can only write to sites it's explicitly assigned to here. Doesn't apply to staff — see below.
+- Storage bucket `site-images`, public read; upload/replace restricted the same way as `site_content` writes (RLS checks the first path segment against `site_editors`/`is_staff`, so images live at `site-images/<site_slug>/...`).
 
-RLS: public (anon) can `SELECT` `site_content` (the site needs to render for every visitor); `UPDATE` requires an authenticated, non-disabled `profiles` row with a matching `site_editors` grant for that `site_slug`. No client-side `INSERT`/`DELETE` policy on `site_content` — rows are seeded once via migration, the app only ever `PATCH`es.
+RLS: public (anon) can `SELECT` `site_content` (the site needs to render for every visitor); `UPDATE` requires an authenticated, non-disabled `profiles` row that is either `is_staff = true` **or** has a matching `site_editors` grant for that `site_slug`. No client-side `INSERT`/`DELETE` policy on `site_content` — rows are seeded once via migration, the app only ever `PATCH`es.
 
 ### Auth model
 
-Client login is real Supabase Auth (email + password) — **not** the old hardcoded PIN (`8421`, now removed). Session lives in `sessionStorage` (not `localStorage`), so it ends when the browser closes, per product spec — re-opening the browser requires logging in again, but exiting/re-entering edit mode within the same browser session does not.
+**One login page, for everyone — clients and Clique Studios staff alike.** There's no separate "developer" login flow; the gear icon always shows the same email + password form. What an account can do is purely a database question, not a UI one:
 
-Olivia's login: `contact@epiclearningpro.com` (password issued out-of-band when the account was created — rotate via Supabase's password-reset-by-email flow, which works out of the box once she has this login, no extra UI needed).
+- **Client accounts** (e.g. Olivia's) are scoped via `site_editors` — they can only ever write to sites explicitly granted to them.
+- **Staff accounts** have `profiles.is_staff = true`, which grants write access to *every* site automatically — no `site_editors` row needed per site, so a new site launching doesn't require manually re-granting every developer. Each developer still gets their **own named account** (`profiles.username` holds their display name) rather than a shared credential, specifically so `site_content.updated_by` gives real attribution — "who made this change" — even when it's staff, not the client. This intentionally replaces the original spec's shared "Developer PIN" concept (see below) — named accounts give per-person attribution that a shared PIN structurally cannot, and cost nothing extra since the whole auth mechanism is already built.
+- Real Supabase Auth (email + password) — **not** the old hardcoded PIN (`8421`, now removed). Session lives in `sessionStorage` (not `localStorage`), so it ends when the browser closes, per product spec — re-opening the browser requires logging in again, but exiting/re-entering edit mode within the same browser session does not.
+- Magic-link/OTP login was considered and deliberately rejected for now: it makes every login depend on email being reachable and fast, which is a bad property specifically on a live client support call, and it doesn't help with the access-scoping problem at all (that's what `is_staff`/`site_editors` solve).
+
+Olivia's login: `contact@epiclearningpro.com`. Staff logins: one per developer, `is_staff = true` (e.g. `onnae@cliquestudios.io`). All passwords issued out-of-band when the account is created — rotate via Supabase's password-reset-by-email flow, which works out of the box, no extra UI needed.
 
 `admin-portal.js` talks to Supabase via plain `fetch()` against the REST/Auth/Storage HTTP APIs directly (`SB` object near the top of the file) — no `supabase-js` dependency, keeping this file dependency-free and consistent with its "vanilla JS, no build step" nature. The Supabase URL and publishable key are public config on the script tag in `index.html` (`data-supabase-url`, `data-supabase-key`) — safe to be public, same pattern other Clique Studios sites use.
 
 ### Deferred (spec'd, not built)
 
-Per the product design doc (`Website Edit Admin Portal — Durable Extract`), three more pieces are real requirements but explicitly out of scope for this pass — don't assume they exist:
+Per the product design doc (`Website Edit Admin Portal — Durable Extract`), two more pieces are real requirements but explicitly out of scope for this pass — don't assume they exist:
 
-- **Developer PIN** — a *separate* staff-only mechanism (rate-limited, masked input, validated server-side against Site ID, rotatable) for temporary support access on a client's site. Not the same thing as client login. Not built.
 - **Client Tools site** — a page on Clique Studios' own site where clients use a 6-8 digit **Site Code** for account actions (can't-log-in, billing, change email). Separate site, not built.
 - **Stripe/entitlement wiring** — `sites.subscription_active` exists as a flag but isn't checked by `admin-portal.js` yet, and isn't connected to Stripe.
+
+The original spec's shared **Developer PIN** (staff-only, rate-limited, masked, validated against Site ID) is **superseded, not deferred** — see Auth model above for why named staff accounts replace it.
 
 ### Admin portal storage layout (local working cache)
 
