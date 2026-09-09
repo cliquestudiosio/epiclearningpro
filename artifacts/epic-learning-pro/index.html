@@ -15,6 +15,23 @@
     <meta name="twitter:description" content="Epic Learning Pro offers professional coaching, consulting, seminars, and proofreading services. With 30+ years of experience, we help individuals and teams achieve their potential." />
     <!-- Will be replaced dynamically but leaving SVG fallback -->
     <link rel="icon" type="image/png" href="/favicon.png" />
+    <style id="ap-boot-hide">body{opacity:0}</style>
+    <script>
+      /* Hide the page until admin-portal.js has applied saved content, so
+         visitors never see a flash of default content before their real
+         edits appear. Hard-capped so a slow/unreachable backend can never
+         leave the page blank -- see admin-portal.js's boot()/reveal(). */
+      (function () {
+        window.__apRevealed = false;
+        window.__apReveal = function () {
+          if (window.__apRevealed) return;
+          window.__apRevealed = true;
+          document.body.style.transition = 'opacity .15s ease';
+          document.body.style.opacity = '1';
+        };
+        setTimeout(window.__apReveal, 900);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
