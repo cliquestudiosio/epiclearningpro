@@ -2250,13 +2250,30 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     BOOT — fetch server content first, hydrate the local cache with it,
+     BOOT — fetch server content and hydrate the local cache with it,
      then run init() unchanged so every visitor (not just the editor's own
-     browser) sees the latest saved edits.
+     browser) sees the latest saved edits. The page stays hidden (see the
+     inline script in index.html's <head>) until reveal() below runs, so
+     none of this is visible as a flash of default content -- the fetch and
+     the settle delay run concurrently, not back-to-back, to keep the
+     hidden window as short as possible.
   ══════════════════════════════════════════════════════════════ */
   function boot(){
     SB.loadSession();
-    SB.fetchContent(function(row){ SB.hydrateFromServer(row,function(){ setTimeout(init,DELAY); }); });
+    var fetchDone=false, settleDone=false, contentRow=null;
+    function proceed(){
+      if(!fetchDone||!settleDone) return;
+      SB.hydrateFromServer(contentRow,function(){
+        init();
+        /* Reveal slightly after init() rather than synchronously with it --
+           init() schedules a couple of its own short setTimeouts (applying
+           text/hex-color overrides), and revealing before those fire would
+           reopen the exact flash this is meant to prevent. */
+        setTimeout(function(){ if(window.__apReveal) window.__apReveal(); },150);
+      });
+    }
+    SB.fetchContent(function(row){ contentRow=row; fetchDone=true; proceed(); });
+    setTimeout(function(){ settleDone=true; proceed(); },DELAY);
   }
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded',boot);

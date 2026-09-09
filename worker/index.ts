@@ -16,6 +16,13 @@ interface ContactPayload {
   message?: string;
 }
 
+function formatPhoneNumber(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 10);
+  if (digits.length < 4) return digits;
+  if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -59,6 +66,7 @@ async function handleContact(request: Request, env: Env): Promise<Response> {
   const contactTo = env.CONTACT_TO_EMAIL || "contact@epiclearningpro.com";
   const contactFrom = env.CONTACT_FROM_EMAIL || "onboarding@resend.dev";
   const fullName = `${firstName.trim()} ${lastName.trim()}`;
+  const formattedPhone = phone ? formatPhoneNumber(phone) : "";
 
   // "from" has to stay on a domain we control — Resend (and every recipient's
   // spam filter) rejects a `from` claiming to be the visitor's own address.
@@ -74,7 +82,7 @@ async function handleContact(request: Request, env: Env): Promise<Response> {
     `Source: ${sourceUrl}`,
     `Name: ${fullName}`,
     `Email: ${email}`,
-    phone ? `Phone: ${phone}` : "",
+    formattedPhone ? `Phone: ${formattedPhone}` : "",
     `Service of Interest: ${service}`,
     "",
     "Message:",
@@ -94,7 +102,7 @@ async function handleContact(request: Request, env: Env): Promise<Response> {
         <table style="width:100%;border-collapse:collapse;">
           <tr><td style="padding:8px 0;color:#6b7280;font-size:14px;width:140px;">Name</td><td style="padding:8px 0;font-weight:600;">${fullName}</td></tr>
           <tr><td style="padding:8px 0;color:#6b7280;font-size:14px;">Email</td><td style="padding:8px 0;"><a href="mailto:${email}" style="color:#8B5FE6;">${email}</a></td></tr>
-          ${phone ? `<tr><td style="padding:8px 0;color:#6b7280;font-size:14px;">Phone</td><td style="padding:8px 0;">${phone}</td></tr>` : ""}
+          ${formattedPhone ? `<tr><td style="padding:8px 0;color:#6b7280;font-size:14px;">Phone</td><td style="padding:8px 0;">${formattedPhone}</td></tr>` : ""}
           <tr><td style="padding:8px 0;color:#6b7280;font-size:14px;">Service</td><td style="padding:8px 0;">${service}</td></tr>
         </table>
         <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />

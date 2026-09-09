@@ -8,6 +8,10 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
+  "vars": {
+    "CONTACT_TO_EMAIL": "portfolio@cliquestudios.io",
+    "CONTACT_FROM_EMAIL": "portfolio@cliquestudios.io"
+  },
   "routes": [
     {
       "pattern": "portfolio.cliquestudios.io/epiclearningpro*",
