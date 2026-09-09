@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Wrangler (Cloudflare Workers CLI local state/cache)
+.wrangler/

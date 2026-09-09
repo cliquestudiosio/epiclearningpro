@@ -1,3 +1,0 @@
-- [Admin Portal Architecture](admin-portal.md) — Path A localStorage portal; data-key/editable attrs permanent for future Cloudflare swap.
-- [Admin Portal Checklist](admin-portal-checklist.md) — All guide §14 items implemented; JS passes --check; see file for what each does.
-- [Deployment Target](deployment-target.md) — GitHub Pages (frontend /epiclearningpro/) + Render.com (API); no Replit hosting.
