@@ -1,7 +1,12 @@
 /**
- * Epic Learning Pro — Admin Portal (Path A · localStorage)
+ * Epic Learning Pro — Admin Portal (Path B · Supabase-backed)
  * Follows Admin-Portal-Replit-Implementation-Guide.md exactly.
- * PIN: 8421
+ * Content persists to Supabase (site_content table) so edits are visible to
+ * every visitor, not just the editor's own browser. localStorage is still
+ * used as the working cache the rest of this file reads/writes, but it is
+ * hydrated from Supabase on load and pushed back up on every save.
+ * Client login is real Supabase Auth (email + password), session-only
+ * (sessionStorage, cleared when the browser closes) — see SB below.
  *
  * Stacking order (guide §5):
  *   [Editor top bar]   z:100000  top:0
@@ -25,11 +30,14 @@
   var IMG_KEY     = 'ap-img-'       + SITE_ID + '-';
   var SECTION_BG_KEY = 'ap-section-bg-' + SITE_ID;
   var HEX_COLOR_KEY  = 'ap-hexcolors-'  + SITE_ID;
-  var PIN         = '8421';
+  var SESSION_KEY = 'ap-session-' + SITE_ID;
   var DELAY       = 420;
 
   var scriptSrc = (script && script.src) ? script.src : '';
   var BASE_PATH = scriptSrc ? scriptSrc.replace(/admin-portal\.js[^/]*$/, '') : '/';
+
+  var SUPABASE_URL     = script ? script.getAttribute('data-supabase-url') : '';
+  var SUPABASE_ANON_KEY = script ? script.getAttribute('data-supabase-key') : '';
 
   /* ── State ────────────────────────────────────────────────── */
   var S = {
@@ -41,6 +49,184 @@
     activeEl: null,
     dirty: false,
   };
+
+  /* ══════════════════════════════════════════════════════════════
+     SUPABASE — auth + content sync (Path B)
+     Client login: email+password, session lives in sessionStorage only
+     (cleared when the browser closes, per product spec). localStorage
+     keys above stay the working cache the rest of this file reads/
+     writes; SB hydrates them from the server on load and pushes them
+     back up after every save.
+  ══════════════════════════════════════════════════════════════ */
+  var SB = { session: null };
+
+  SB.loadSession = function () {
+    try { var raw = sessionStorage.getItem(SESSION_KEY); SB.session = raw ? JSON.parse(raw) : null; }
+    catch (e) { SB.session = null; }
+  };
+  SB.saveSession = function (s) {
+    SB.session = s;
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(s)); } catch (e) {}
+  };
+  SB.clearSession = function () {
+    SB.session = null;
+    try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
+  };
+  SB.isLoggedIn = function () { return !!(SB.session && SB.session.access_token && SB.session.refresh_token); };
+
+  SB.signIn = function (email, password, cb) {
+    fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: password })
+    }).then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.body.access_token) { cb((res.body && (res.body.error_description || res.body.msg)) || 'Incorrect email or password.'); return; }
+        SB.saveSession({
+          access_token: res.body.access_token,
+          refresh_token: res.body.refresh_token,
+          expires_at: Date.now() + ((res.body.expires_in || 3600) * 1000),
+          user_id: res.body.user && res.body.user.id
+        });
+        cb(null);
+      }).catch(function () { cb('Network error — check your connection.'); });
+  };
+
+  SB.refresh = function (cb) {
+    if (!SB.session || !SB.session.refresh_token) { cb('No session'); return; }
+    fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: SB.session.refresh_token })
+    }).then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.body.access_token) { SB.clearSession(); cb('Session expired'); return; }
+        SB.saveSession({
+          access_token: res.body.access_token,
+          refresh_token: res.body.refresh_token,
+          expires_at: Date.now() + ((res.body.expires_in || 3600) * 1000),
+          user_id: (res.body.user && res.body.user.id) || SB.session.user_id
+        });
+        cb(null);
+      }).catch(function () { cb('Network error'); });
+  };
+
+  SB.ensureFreshToken = function (cb) {
+    if (!SB.session) { cb('Not logged in'); return; }
+    if (SB.session.expires_at - Date.now() > 30000) { cb(null); return; }
+    SB.refresh(cb);
+  };
+
+  SB.fetchContent = function (cb) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) { cb(null); return; }
+    fetch(SUPABASE_URL + '/rest/v1/site_content?site_slug=eq.' + encodeURIComponent(SITE_ID) + '&select=content,hex_colors,promo,section_bg,images', {
+      headers: { 'apikey': SUPABASE_ANON_KEY }
+    }).then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) { cb(rows && rows[0] ? rows[0] : null); })
+      .catch(function () { cb(null); });
+  };
+
+  /* Overwrite the local working cache with the server's row so the rest of
+     this file (unchanged) reads server-truth on boot. */
+  SB.hydrateFromServer = function (row, done) {
+    if (row) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(row.content || {}));
+      localStorage.setItem(HEX_COLOR_KEY, JSON.stringify(row.hex_colors || {}));
+      localStorage.setItem(PROMO_KEY, JSON.stringify(row.promo || {}));
+      localStorage.setItem(SECTION_BG_KEY, JSON.stringify(row.section_bg || {}));
+      for (var i = localStorage.length - 1; i >= 0; i--) {
+        var k = localStorage.key(i); if (k && k.indexOf(IMG_KEY) === 0) localStorage.removeItem(k);
+      }
+      var images = row.images || {};
+      Object.keys(images).forEach(function (key) { localStorage.setItem(IMG_KEY + key, images[key]); });
+    }
+    done();
+  };
+
+  SB._dataUrlToBlob = function (dataUrl) {
+    var meta = dataUrl.split(',')[0];
+    var mimeMatch = meta.match(/data:([^;]+);base64/);
+    var mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    var binary = atob(dataUrl.split(',')[1]);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  };
+
+  /* Any locally-picked image is still a base64 data: URL until this uploads
+     it to the site-images Storage bucket and swaps the cached value for the
+     resulting public URL (Storage, not base64-in-the-database, per design). */
+  SB.uploadPendingImages = function (cb) {
+    var pending = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf(IMG_KEY) === 0) {
+        var v = localStorage.getItem(k);
+        if (v && v.indexOf('data:') === 0) pending.push({ storageKey: k, dataKey: k.slice(IMG_KEY.length), dataUrl: v });
+      }
+    }
+    if (!pending.length) { cb(null); return; }
+    var remaining = pending.length, failed = null;
+    pending.forEach(function (item) {
+      var blob = SB._dataUrlToBlob(item.dataUrl);
+      var ext = (blob.type.split('/')[1] || 'bin').replace(/[^a-z0-9]/gi, '');
+      var path = encodeURIComponent(SITE_ID) + '/' + encodeURIComponent(item.dataKey) + '-' + Date.now() + '.' + ext;
+      fetch(SUPABASE_URL + '/storage/v1/object/site-images/' + path, {
+        method: 'POST',
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + (SB.session ? SB.session.access_token : ''), 'Content-Type': blob.type, 'x-upsert': 'true' },
+        body: blob
+      }).then(function (r) {
+        if (!r.ok) throw new Error('Image upload failed');
+        localStorage.setItem(item.storageKey, SUPABASE_URL + '/storage/v1/object/public/site-images/' + path);
+      }).catch(function (e) { failed = e; })
+        .then(function () { remaining--; if (remaining === 0) cb(failed); });
+    });
+  };
+
+  SB.collectImagesMap = function () {
+    var map = {};
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf(IMG_KEY) === 0) { var v = localStorage.getItem(k); if (v) map[k.slice(IMG_KEY.length)] = v; }
+    }
+    return map;
+  };
+
+  SB.saveContent = function (patch, cb) {
+    SB.ensureFreshToken(function (err) {
+      if (err) { cb(err); return; }
+      fetch(SUPABASE_URL + '/rest/v1/site_content?site_slug=eq.' + encodeURIComponent(SITE_ID), {
+        method: 'PATCH',
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SB.session.access_token, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify(Object.assign({}, patch, { updated_by: SB.session.user_id }))
+      }).then(function (r) {
+        if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'Save failed'); });
+        cb(null);
+      }).catch(function (e) { cb(e.message || 'Save failed'); });
+    });
+  };
+
+  /* Debounced push of the full local cache up to Supabase — called after
+     every persistence point below (Save button, live color/bg saves, image
+     picks, per-keystroke contact/nav fields). Coalesces rapid-fire calls
+     (e.g. dragging a gradient color picker) into one network request. */
+  var serverSyncTimer = null;
+  function scheduleServerSync() {
+    if (!SB.isLoggedIn()) return;
+    if (serverSyncTimer) clearTimeout(serverSyncTimer);
+    serverSyncTimer = setTimeout(function () {
+      serverSyncTimer = null;
+      SB.uploadPendingImages(function () {
+        SB.saveContent({
+          content: readJSON(STORAGE_KEY) || {},
+          hex_colors: readJSON(HEX_COLOR_KEY) || {},
+          promo: readJSON(PROMO_KEY) || {},
+          section_bg: readJSON(SECTION_BG_KEY) || {},
+          images: SB.collectImagesMap()
+        }, function (err) { if (err) toast('Could not save to server: ' + err); });
+      });
+    }, 700);
+  }
 
   /* ── Brand Colors — guide §10: Primary/Secondary/Accent ONLY
      No color names ("purple"/"teal"). No gradient stop tokens.
@@ -421,6 +607,7 @@
     if(Object.keys(savedColors).length) localStorage.setItem(COLOR_KEY,JSON.stringify(savedColors));
 
     S.dirty=false;
+    scheduleServerSync();
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -503,11 +690,14 @@
       'a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>'+
       '<circle cx="12" cy="12" r="3"/></svg>';
     anchor.appendChild(btn);
-    btn.addEventListener('click',function(){ if(!S.editMode) showLogin(); else openPanel(); });
+    btn.addEventListener('click',function(){
+      if(S.editMode){ openPanel(); return; }
+      if(SB.isLoggedIn()) enterEditMode(); else showLogin();
+    });
   }
 
   /* ══════════════════════════════════════════════════════════════
-     LOGIN
+     LOGIN — Supabase email + password (session ends on browser close)
   ══════════════════════════════════════════════════════════════ */
   function showLogin(){
     if(document.getElementById('ap-login-overlay')) return;
@@ -515,20 +705,33 @@
     ov.innerHTML=
       '<div id="ap-login-modal">'+
         '<div id="ap-login-logo">⚙ Admin Editor</div>'+
-        '<p id="ap-login-sub">Local Preview Mode · '+escH(SITE_ID)+'</p>'+
-        '<div id="ap-login-error" style="display:none">Incorrect PIN. Please try again.</div>'+
-        '<label for="ap-pin-input">Developer PIN</label>'+
-        '<input type="password" id="ap-pin-input" placeholder="Enter PIN" autocomplete="off" maxlength="12" />'+
-        '<button id="ap-login-btn">Enter Edit Mode</button>'+
+        '<p id="ap-login-sub">'+escH(SITE_ID)+'</p>'+
+        '<div id="ap-login-error" style="display:none"></div>'+
+        '<label for="ap-email-input">Email</label>'+
+        '<input type="email" id="ap-email-input" placeholder="you@example.com" autocomplete="username" />'+
+        '<label for="ap-password-input">Password</label>'+
+        '<input type="password" id="ap-password-input" placeholder="Password" autocomplete="current-password" />'+
+        '<button id="ap-login-btn">Log In</button>'+
         '<button id="ap-login-cancel">Cancel</button>'+
       '</div>';
     document.body.appendChild(ov);
-    var inp=ov.querySelector('#ap-pin-input');
+    var emailInp=ov.querySelector('#ap-email-input');
+    var passInp=ov.querySelector('#ap-password-input');
     var err=ov.querySelector('#ap-login-error');
-    setTimeout(function(){ inp.focus(); },50);
-    function attempt(){ if(inp.value===PIN){ ov.remove(); enterEditMode(); } else { err.style.display='block'; inp.value=''; inp.focus(); } }
-    ov.querySelector('#ap-login-btn').addEventListener('click',attempt);
-    inp.addEventListener('keydown',function(e){ if(e.key==='Enter') attempt(); if(e.key==='Escape') ov.remove(); });
+    var loginBtn=ov.querySelector('#ap-login-btn');
+    setTimeout(function(){ emailInp.focus(); },50);
+    function attempt(){
+      if(!emailInp.value||!passInp.value) return;
+      loginBtn.disabled=true; loginBtn.textContent='Logging in…'; err.style.display='none';
+      SB.signIn(emailInp.value.trim(),passInp.value,function(loginErr){
+        loginBtn.disabled=false; loginBtn.textContent='Log In';
+        if(loginErr){ err.textContent=loginErr; err.style.display='block'; passInp.value=''; passInp.focus(); return; }
+        ov.remove(); enterEditMode();
+      });
+    }
+    loginBtn.addEventListener('click',attempt);
+    passInp.addEventListener('keydown',function(e){ if(e.key==='Enter') attempt(); if(e.key==='Escape') ov.remove(); });
+    emailInp.addEventListener('keydown',function(e){ if(e.key==='Enter') passInp.focus(); if(e.key==='Escape') ov.remove(); });
     ov.querySelector('#ap-login-cancel').addEventListener('click',function(){ ov.remove(); });
     ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
   }
@@ -685,6 +888,7 @@
           document.querySelectorAll('[data-editable-image][data-key="'+key+'"]').forEach(function(img){ img.src=dataUrl; });
           localStorage.setItem(IMG_KEY+key,dataUrl);
           S.dirty=true; toast('Logo updated — hit Save to keep it.');
+          scheduleServerSync();
         };
         reader.readAsDataURL(file);
       });
@@ -716,6 +920,7 @@
         document.querySelectorAll('[data-editable-image][data-key="'+key+'"]').forEach(function(img){ img.src=dataUrl; });
         localStorage.setItem(IMG_KEY+key,dataUrl);
         S.dirty=true; toast('Image updated — hit Save to keep it.');
+        scheduleServerSync();
       };
       reader.readAsDataURL(file);
     });
@@ -763,17 +968,20 @@
     document.getElementById('ap-btn-preview').addEventListener('click',enterPreview);
     document.getElementById('ap-btn-exit').addEventListener('click',function(){ exitEditMode(false); });
     document.getElementById('ap-btn-save').addEventListener('click',function(){
-      commitActive(); saveAll(); toast('Saved (local preview mode)');
+      commitActive(); saveAll(); toast('Saved');
     });
     var rb=document.getElementById('ap-btn-restore');
     if(rb){
       rb.addEventListener('click',function(){
         if(!confirm('Restore to original version? All saved edits will be cleared.')) return;
-        [STORAGE_KEY,COLOR_KEY,PROMO_KEY,SECTION_BG_KEY].forEach(function(k){ localStorage.removeItem(k); });
+        [STORAGE_KEY,COLOR_KEY,HEX_COLOR_KEY,PROMO_KEY,SECTION_BG_KEY].forEach(function(k){ localStorage.removeItem(k); });
         for(var i=localStorage.length-1;i>=0;i--){
           var k2=localStorage.key(i); if(k2&&k2.startsWith(IMG_KEY)) localStorage.removeItem(k2);
         }
-        toast('Restored — reloading…'); setTimeout(function(){ location.reload(); },1200);
+        toast('Restoring…');
+        SB.saveContent({content:{},hex_colors:{},promo:{},section_bg:{},images:{}},function(){
+          toast('Restored — reloading…'); setTimeout(function(){ location.reload(); },800);
+        });
       });
     }
   }
@@ -1370,6 +1578,7 @@
           if(!snap2[key]||typeof snap2[key]!=='object') snap2[key]={};
           snap2[key][tf]=val;
           localStorage.setItem(STORAGE_KEY,JSON.stringify(snap2));
+          scheduleServerSync();
           document.querySelectorAll('[data-editable-contact][data-key="'+key+'"]').forEach(function(el){
             if(tf==='text') el.textContent=val;
             if(tf==='href'&&el.tagName==='A') el.href=val;
@@ -1392,6 +1601,7 @@
         if(nf==='destValUrl') snap3[key].destVal=val;
         else snap3[key][nf]=val;
         localStorage.setItem(STORAGE_KEY,JSON.stringify(snap3));
+        scheduleServerSync();
         if(nf==='text'){
           /* Update nav items */
           document.querySelectorAll('[data-editable-nav] [data-key="'+key+'"]').forEach(function(el){ el.textContent=val; });
@@ -1517,6 +1727,7 @@
             document.querySelectorAll('[data-editable-image][data-key="'+imgKey+'"]').forEach(function(img){ img.src=dataUrl; });
             localStorage.setItem(IMG_KEY+imgKey,dataUrl);
             S.dirty=true; toast('Photo updated — hit Save to keep it.');
+            scheduleServerSync();
           };
           reader.readAsDataURL(file);
         });
@@ -1603,6 +1814,7 @@
       });
       localStorage.setItem(HEX_COLOR_KEY,JSON.stringify(toSave));
       S.dirty=false; toast('Colors saved'); modal.remove();
+      scheduleServerSync();
     });
   }
 
@@ -1742,6 +1954,7 @@
       });
       localStorage.setItem(SECTION_BG_KEY,JSON.stringify(toSave));
       S.dirty=false; toast('Backgrounds saved'); panel.remove();
+      scheduleServerSync();
     });
   }
 
@@ -1947,6 +2160,7 @@
       localStorage.setItem(PROMO_KEY,JSON.stringify(newData));
       applyPromoData(newData);
       S.dirty=false; toast('Promo saved'); modal.remove();
+      scheduleServerSync();
     });
   }
 
@@ -2036,12 +2250,18 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
-     BOOT
+     BOOT — fetch server content first, hydrate the local cache with it,
+     then run init() unchanged so every visitor (not just the editor's own
+     browser) sees the latest saved edits.
   ══════════════════════════════════════════════════════════════ */
+  function boot(){
+    SB.loadSession();
+    SB.fetchContent(function(row){ SB.hydrateFromServer(row,function(){ setTimeout(init,DELAY); }); });
+  }
   if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',function(){ setTimeout(init,DELAY); });
+    document.addEventListener('DOMContentLoaded',boot);
   } else {
-    setTimeout(init,DELAY);
+    boot();
   }
 
 }());
