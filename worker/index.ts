@@ -60,7 +60,18 @@ async function handleContact(request: Request, env: Env): Promise<Response> {
   const contactFrom = env.CONTACT_FROM_EMAIL || "onboarding@resend.dev";
   const fullName = `${firstName.trim()} ${lastName.trim()}`;
 
+  // "from" has to stay on a domain we control — Resend (and every recipient's
+  // spam filter) rejects a `from` claiming to be the visitor's own address.
+  // reply_to below is what actually makes "hit reply" go to the client.
+  // The site tag + source URL are so one shared inbox can tell multiple
+  // portfolio sites' inquiries apart.
+  const siteTag = BASE_PATH.replace(/^\//, "");
+  const sourceUrl =
+    request.headers.get("Referer") ||
+    `${new URL(request.url).origin}${BASE_PATH}/`;
+
   const text = [
+    `Source: ${sourceUrl}`,
     `Name: ${fullName}`,
     `Email: ${email}`,
     phone ? `Phone: ${phone}` : "",
@@ -77,7 +88,7 @@ async function handleContact(request: Request, env: Env): Promise<Response> {
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
       <div style="background:linear-gradient(135deg,#8B5FE6,#36A6DD);padding:24px;border-radius:12px 12px 0 0;">
         <h1 style="color:#fff;margin:0;font-size:22px;">New Website Inquiry</h1>
-        <p style="color:rgba(255,255,255,0.85);margin:4px 0 0;font-size:14px;">Epic Learning Pro Contact Form</p>
+        <p style="color:rgba(255,255,255,0.85);margin:4px 0 0;font-size:14px;">${sourceUrl}</p>
       </div>
       <div style="background:#f9f9f9;padding:24px;border-radius:0 0 12px 12px;border:1px solid #e5e7eb;border-top:none;">
         <table style="width:100%;border-collapse:collapse;">
@@ -105,7 +116,7 @@ async function handleContact(request: Request, env: Env): Promise<Response> {
         from: `Epic Learning Pro Website <${contactFrom}>`,
         to: contactTo,
         reply_to: `${fullName} <${email}>`,
-        subject: `Website Inquiry – ${service} – from ${fullName}`,
+        subject: `[${siteTag}] ${service} – from ${fullName}`,
         text,
         html,
       }),
