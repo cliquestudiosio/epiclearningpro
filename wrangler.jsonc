@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "epiclearningpro",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-09-08",
+  "assets": {
+    "directory": "./artifacts/epic-learning-pro/dist/public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [
+    {
+      "pattern": "portfolio.cliquestudios.io/epiclearningpro*",
+      "zone_name": "cliquestudios.io"
+    }
+  ]
+}
