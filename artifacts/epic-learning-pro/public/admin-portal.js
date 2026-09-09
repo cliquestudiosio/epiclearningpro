@@ -1,12 +1,15 @@
 /**
- * Epic Learning Pro — Admin Portal (Path B · Supabase-backed)
+ * Epic Learning Pro — Admin Portal (Path C · Cloudflare-backed)
  * Follows Admin-Portal-Replit-Implementation-Guide.md exactly.
- * Content persists to Supabase (site_content table) so edits are visible to
- * every visitor, not just the editor's own browser. localStorage is still
- * used as the working cache the rest of this file reads/writes, but it is
- * hydrated from Supabase on load and pushed back up on every save.
- * Client login is real Supabase Auth (email + password), session-only
- * (sessionStorage, cleared when the browser closes) — see SB below.
+ * Content persists via this site's own Cloudflare Worker (D1 + KV + R2 —
+ * see worker/index.ts) so edits are visible to every visitor, not just the
+ * editor's own browser. localStorage is still used as the working cache
+ * the rest of this file reads/writes, but it is hydrated from
+ * window.__AP_CONTENT__ (inlined into the page server-side, no network
+ * round trip) on load and pushed back up to the Worker on every save.
+ * Client login is email + password against the Worker's own D1-backed
+ * auth, session-only (sessionStorage, cleared when the browser closes) —
+ * see SB below.
  *
  * Stacking order (guide §5):
  *   [Editor top bar]   z:100000  top:0
@@ -31,13 +34,10 @@
   var SECTION_BG_KEY = 'ap-section-bg-' + SITE_ID;
   var HEX_COLOR_KEY  = 'ap-hexcolors-'  + SITE_ID;
   var SESSION_KEY = 'ap-session-' + SITE_ID;
-  var DELAY       = 420;
 
   var scriptSrc = (script && script.src) ? script.src : '';
   var BASE_PATH = scriptSrc ? scriptSrc.replace(/admin-portal\.js[^/]*$/, '') : '/';
-
-  var SUPABASE_URL     = script ? script.getAttribute('data-supabase-url') : '';
-  var SUPABASE_ANON_KEY = script ? script.getAttribute('data-supabase-key') : '';
+  var API_BASE  = BASE_PATH + 'api/';
 
   /* ── State ────────────────────────────────────────────────── */
   var S = {
@@ -51,12 +51,16 @@
   };
 
   /* ══════════════════════════════════════════════════════════════
-     SUPABASE — auth + content sync (Path B)
-     Client login: email+password, session lives in sessionStorage only
-     (cleared when the browser closes, per product spec). localStorage
-     keys above stay the working cache the rest of this file reads/
-     writes; SB hydrates them from the server on load and pushes them
-     back up after every save.
+     CLOUDFLARE BACKEND — auth + content sync (Path C)
+     Everything (D1 for accounts/access, KV for the content blob, R2
+     for images) lives behind this site's own Cloudflare Worker, same
+     origin as the page itself -- no CORS, no external API keys on the
+     page. Client login: email+password, session lives in sessionStorage
+     only (cleared when the browser closes, per product spec).
+     localStorage keys above stay the working cache the rest of this
+     file reads/writes; SB hydrates them from window.__AP_CONTENT__
+     (inlined server-side into the page, see worker/index.ts) on boot,
+     and pushes them back up to the Worker after every save.
   ══════════════════════════════════════════════════════════════ */
   var SB = { session: null };
 
@@ -72,62 +76,36 @@
     SB.session = null;
     try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
   };
-  SB.isLoggedIn = function () { return !!(SB.session && SB.session.access_token && SB.session.refresh_token); };
+  SB.isLoggedIn = function () {
+    return !!(SB.session && SB.session.token && SB.session.expires_at > Date.now());
+  };
 
   SB.signIn = function (email, password, cb) {
-    fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
+    fetch(API_BASE + 'auth/login', {
       method: 'POST',
-      headers: { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email, password: password })
     }).then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
       .then(function (res) {
-        if (!res.ok || !res.body.access_token) { cb((res.body && (res.body.error_description || res.body.msg)) || 'Incorrect email or password.'); return; }
+        if (!res.ok || !res.body.token) { cb((res.body && res.body.error) || 'Incorrect email or password.'); return; }
         SB.saveSession({
-          access_token: res.body.access_token,
-          refresh_token: res.body.refresh_token,
-          expires_at: Date.now() + ((res.body.expires_in || 3600) * 1000),
-          user_id: res.body.user && res.body.user.id
+          token: res.body.token,
+          expires_at: new Date(res.body.expires_at).getTime(),
+          user_id: res.body.user_id
         });
         cb(null);
       }).catch(function () { cb('Network error — check your connection.'); });
   };
 
-  SB.refresh = function (cb) {
-    if (!SB.session || !SB.session.refresh_token) { cb('No session'); return; }
-    fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
-      method: 'POST',
-      headers: { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: SB.session.refresh_token })
-    }).then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
-      .then(function (res) {
-        if (!res.ok || !res.body.access_token) { SB.clearSession(); cb('Session expired'); return; }
-        SB.saveSession({
-          access_token: res.body.access_token,
-          refresh_token: res.body.refresh_token,
-          expires_at: Date.now() + ((res.body.expires_in || 3600) * 1000),
-          user_id: (res.body.user && res.body.user.id) || SB.session.user_id
-        });
-        cb(null);
-      }).catch(function () { cb('Network error'); });
-  };
-
-  SB.ensureFreshToken = function (cb) {
-    if (!SB.session) { cb('Not logged in'); return; }
-    if (SB.session.expires_at - Date.now() > 30000) { cb(null); return; }
-    SB.refresh(cb);
-  };
-
   SB.fetchContent = function (cb) {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) { cb(null); return; }
-    fetch(SUPABASE_URL + '/rest/v1/site_content?site_slug=eq.' + encodeURIComponent(SITE_ID) + '&select=content,hex_colors,promo,section_bg,images', {
-      headers: { 'apikey': SUPABASE_ANON_KEY }
-    }).then(function (r) { return r.ok ? r.json() : []; })
-      .then(function (rows) { cb(rows && rows[0] ? rows[0] : null); })
+    fetch(API_BASE + 'site-content?site=' + encodeURIComponent(SITE_ID))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (row) { cb(row); })
       .catch(function () { cb(null); });
   };
 
-  /* Overwrite the local working cache with the server's row so the rest of
-     this file (unchanged) reads server-truth on boot. */
+  /* Overwrite the local working cache with the given content row so the
+     rest of this file (unchanged) reads server-truth on boot. */
   SB.hydrateFromServer = function (row, done) {
     if (row) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(row.content || {}));
@@ -154,8 +132,8 @@
   };
 
   /* Any locally-picked image is still a base64 data: URL until this uploads
-     it to the site-images Storage bucket and swaps the cached value for the
-     resulting public URL (Storage, not base64-in-the-database, per design). */
+     it via the Worker to R2 and swaps the cached value for the resulting
+     public URL (R2, not base64-in-the-database, per design). */
   SB.uploadPendingImages = function (cb) {
     var pending = [];
     for (var i = 0; i < localStorage.length; i++) {
@@ -169,16 +147,15 @@
     var remaining = pending.length, failed = null;
     pending.forEach(function (item) {
       var blob = SB._dataUrlToBlob(item.dataUrl);
-      var ext = (blob.type.split('/')[1] || 'bin').replace(/[^a-z0-9]/gi, '');
-      var path = encodeURIComponent(SITE_ID) + '/' + encodeURIComponent(item.dataKey) + '-' + Date.now() + '.' + ext;
-      fetch(SUPABASE_URL + '/storage/v1/object/site-images/' + path, {
+      fetch(API_BASE + 'upload-image?site=' + encodeURIComponent(SITE_ID) + '&key=' + encodeURIComponent(item.dataKey), {
         method: 'POST',
-        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + (SB.session ? SB.session.access_token : ''), 'Content-Type': blob.type, 'x-upsert': 'true' },
+        headers: { 'Authorization': 'Bearer ' + (SB.session ? SB.session.token : ''), 'Content-Type': blob.type },
         body: blob
-      }).then(function (r) {
-        if (!r.ok) throw new Error('Image upload failed');
-        localStorage.setItem(item.storageKey, SUPABASE_URL + '/storage/v1/object/public/site-images/' + path);
-      }).catch(function (e) { failed = e; })
+      }).then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+        .then(function (res) {
+          if (!res.ok || !res.body.url) throw new Error((res.body && res.body.error) || 'Image upload failed');
+          localStorage.setItem(item.storageKey, res.body.url);
+        }).catch(function (e) { failed = e; })
         .then(function () { remaining--; if (remaining === 0) cb(failed); });
     });
   };
@@ -193,20 +170,18 @@
   };
 
   SB.saveContent = function (patch, cb) {
-    SB.ensureFreshToken(function (err) {
-      if (err) { cb(err); return; }
-      fetch(SUPABASE_URL + '/rest/v1/site_content?site_slug=eq.' + encodeURIComponent(SITE_ID), {
-        method: 'PATCH',
-        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SB.session.access_token, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-        body: JSON.stringify(Object.assign({}, patch, { updated_by: SB.session.user_id }))
-      }).then(function (r) {
-        if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'Save failed'); });
-        cb(null);
-      }).catch(function (e) { cb(e.message || 'Save failed'); });
-    });
+    if (!SB.isLoggedIn()) { cb('Not logged in'); return; }
+    fetch(API_BASE + 'site-content', {
+      method: 'PATCH',
+      headers: { 'Authorization': 'Bearer ' + SB.session.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ site_slug: SITE_ID }, patch))
+    }).then(function (r) {
+      if (!r.ok) return r.json().then(function (b) { throw new Error((b && b.error) || 'Save failed'); });
+      cb(null);
+    }).catch(function (e) { cb(e.message || 'Save failed'); });
   };
 
-  /* Debounced push of the full local cache up to Supabase — called after
+  /* Debounced push of the full local cache up to the Worker — called after
      every persistence point below (Save button, live color/bg saves, image
      picks, per-keystroke contact/nav fields). Coalesces rapid-fire calls
      (e.g. dragging a gradient color picker) into one network request. */
@@ -635,14 +610,14 @@
     injectStylesheet();
 
     var saved=readJSON(STORAGE_KEY);
-    if(saved) setTimeout(function(){ applySnap(saved); },60);
+    if(saved) applySnap(saved);
 
     var savedColors=readJSON(COLOR_KEY);
     if(savedColors) applyColors(savedColors);
 
     /* New hex-to-hex color remappings */
     var savedHexColors=readJSON(HEX_COLOR_KEY);
-    if(savedHexColors) setTimeout(function(){ applyColors(savedHexColors); },80);
+    if(savedHexColors) applyColors(savedHexColors);
 
     var savedBgs=readJSON(SECTION_BG_KEY);
     if(savedBgs) applySectionBgs(savedBgs);
@@ -2249,31 +2224,34 @@
     });
   }
 
+  /* React's initial render isn't guaranteed to have committed by the time
+     this deferred script runs (measured: it can take more than one
+     animation frame for a tree this size) -- so instead of guessing a
+     frame count or a setTimeout delay, poll until a footer element React
+     renders actually exists, capped so a selector mismatch can never hang
+     boot forever. Typically resolves within 1-2 frames. */
+  function whenDomReady(cb){
+    var attempts=0;
+    function check(){
+      attempts++;
+      if(document.getElementById('ap-gear-anchor')||attempts>60){ cb(); return; }
+      requestAnimationFrame(check);
+    }
+    requestAnimationFrame(check);
+  }
+
   /* ══════════════════════════════════════════════════════════════
-     BOOT — fetch server content and hydrate the local cache with it,
-     then run init() unchanged so every visitor (not just the editor's own
-     browser) sees the latest saved edits. The page stays hidden (see the
-     inline script in index.html's <head>) until reveal() below runs, so
-     none of this is visible as a flash of default content -- the fetch and
-     the settle delay run concurrently, not back-to-back, to keep the
-     hidden window as short as possible.
+     BOOT — hydrate the local cache from window.__AP_CONTENT__ (inlined
+     into the page server-side by worker/index.ts, read from its edge KV
+     cache -- see the comment above the SB block) and run init(). There is
+     no network round trip on the common path: the data is already on the
+     page by the time this script runs, which is what actually fixes the
+     old flash-of-default-content problem, rather than just hiding it.
   ══════════════════════════════════════════════════════════════ */
   function boot(){
     SB.loadSession();
-    var fetchDone=false, settleDone=false, contentRow=null;
-    function proceed(){
-      if(!fetchDone||!settleDone) return;
-      SB.hydrateFromServer(contentRow,function(){
-        init();
-        /* Reveal slightly after init() rather than synchronously with it --
-           init() schedules a couple of its own short setTimeouts (applying
-           text/hex-color overrides), and revealing before those fire would
-           reopen the exact flash this is meant to prevent. */
-        setTimeout(function(){ if(window.__apReveal) window.__apReveal(); },150);
-      });
-    }
-    SB.fetchContent(function(row){ contentRow=row; fetchDone=true; proceed(); });
-    setTimeout(function(){ settleDone=true; proceed(); },DELAY);
+    var row = window.__AP_CONTENT__ || null;
+    SB.hydrateFromServer(row,function(){ whenDomReady(init); });
   }
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded',boot);

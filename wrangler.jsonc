@@ -6,8 +6,22 @@
   "assets": {
     "directory": "./artifacts/epic-learning-pro/dist/public",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "client-facing-tools",
+      "database_id": "6a0fb82e-a992-4639-a148-76606e79f4b3"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CONTENT_KV",
+      "id": "dde5b372d4a14fc6bf71946391934808"
+    }
+  ],
   "routes": [
     {
       "pattern": "portfolio.cliquestudios.io/epiclearningpro*",
