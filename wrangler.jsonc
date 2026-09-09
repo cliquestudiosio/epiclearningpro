@@ -22,6 +22,10 @@
       "id": "dde5b372d4a14fc6bf71946391934808"
     }
   ],
+  "vars": {
+    "CONTACT_TO_EMAIL": "portfolio@cliquestudios.io",
+    "CONTACT_FROM_EMAIL": "contact@portfolio.cliquestudios.io"
+  },
   "routes": [
     {
       "pattern": "portfolio.cliquestudios.io/epiclearningpro*",
