@@ -689,7 +689,7 @@ export default function Home() {
                       </div>
                       <h3 className="text-2xl font-serif font-semibold text-white mb-3">Message Sent!</h3>
                       <p className="text-white/80 max-w-md mx-auto mb-6 leading-relaxed">
-                        Thank you for reaching out! Olivia will be in touch with you soon.
+                        Thank you for reaching out! We'll be in touch with you soon.
                       </p>
                       <button onClick={() => { setSubmitted(false); setForm({ firstName: '', lastName: '', email: '', phone: '', service: '', message: '' }); }}
                         className="text-white/70 hover:text-white text-sm underline underline-offset-4 transition-colors">
